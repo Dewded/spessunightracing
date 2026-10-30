@@ -19,6 +19,7 @@
 #define ExitCriticalSection()
 
 #include "platform/native_assets.h"
+#include "platform/native_display.h"
 #include "platform/native_log.h"
 #include "platform/native_memory.h"
 #include "platform/native_perf.h"
@@ -42,6 +43,7 @@
 #include "platform/native_checkpoint.c"
 #include "platform/native_checkpoint_file.c"
 #include "platform/native_cd.c"
+#include "platform/native_display.c"
 #include "platform/native_gpu_links.c"
 #include "platform/native_gpu.c"
 #include "platform/native_gte_core.c"
@@ -183,13 +185,21 @@ int main(int argc, char *argv[])
 	}
 #endif
 
-#ifdef USE_16BY9
-	printf("[CTR Native] Widescreen\n");
-	Platform_Init("Crash Team Racing", 1280, 720);
-#else
-	printf("[CTR Native] 4:3\n");
-	Platform_Init("Crash Team Racing", 800, 600);
-#endif
+	if (NativeDisplay_ConfigureFromArgs(argc, argv) != 0)
+	{
+		return NativeConsole_Return(1);
+	}
+
+	if (NativeDisplay_IsWidescreen())
+	{
+		printf("[CTR Native] Widescreen\n");
+		Platform_Init("Crash Team Racing", 1280, 720);
+	}
+	else
+	{
+		printf("[CTR Native] 4:3\n");
+		Platform_Init("Crash Team Racing", 800, 600);
+	}
 
 #if defined(CTR_INTERNAL)
 	if (NativePerf_ConfigureFromArgs(argc, argv) != 0)

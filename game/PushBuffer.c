@@ -219,6 +219,11 @@ void PushBuffer_SetDrawEnv_Normal(void *ot, struct PushBuffer *pb, struct DB *ba
 		newDrawEnv.clip.h = pb->rect.h;
 		newDrawEnv.ofs[0] += pb->rect.x;
 		newDrawEnv.ofs[1] += pb->rect.y;
+#if defined(CTR_NATIVE)
+		// Widescreen views extend past the PS1 draw page. Keep the encoded draw area
+		// on the page; the native renderer extends areas that touch the screen edge.
+		NativeDisplay_ClampDrawArea(&newDrawEnv.clip.x, &newDrawEnv.clip.w, backBuffer->drawEnv.clip.x, backBuffer->drawEnv.clip.w);
+#endif
 	}
 	newDrawEnv.isbg = isbg;
 

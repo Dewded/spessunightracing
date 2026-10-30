@@ -28,6 +28,8 @@ void Platform_PollHostEvents(void);
 int Platform_PollInput(void);
 
 #if defined(CTR_NATIVE)
+#include "platform/native_display.h"
+
 int NikoGetEnterKey(void);
 #endif
 

@@ -168,6 +168,19 @@ The full extracted asset list is:
 `BIGFILE.BIG` and `SOUNDS/KART.HWL` are required. Missing XA/XNF files or
 `TEST.STR` produce a startup warning: the game can continue without the affected streamed audio or Scrapbook video. Files available in `ctr-u.bin` still provide the fallback for missing extracted files. A present but invalid XA manifest remains a startup error.
 
+## Display Options
+
+By default the game renders in 16:9 widescreen at a resolution matched to the window. Race and menu 3D views gain extra
+picture at the left and right edges, while the HUD, menus and videos keep their original 4:3 layout in the middle.
+
+| Option | Effect |
+|---|---|
+| `--fullscreen` | Start in fullscreen (`F11` or `Alt+Enter` toggles at any time) |
+| `--4x3` | Original 4:3 picture |
+| `--scale N` | Render at N× PS1 resolution (`1`–`8`); `0` (default) picks the smallest scale that fills the window height |
+
+`--scale 1 --4x3` reproduces the original presentation.
+
 ## Bug Replays
 
 Internal builds can record a small bug report folder. See `docs/REPLAYS.md`.

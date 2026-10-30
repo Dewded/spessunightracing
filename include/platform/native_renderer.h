@@ -14,6 +14,7 @@ void NativeRenderer_FinishGpuMeasurements(void);
 void NativeRenderer_UpdateSwapIntervalState(int swapInterval);
 void NativeRenderer_SwapWindow(void);
 void NativeRenderer_StoreFrameBuffer(int x, int y, int w, int h);
+void NativeRenderer_PresentMainTarget(void);
 void NativeRenderer_PresentVRAMDisplay(void);
 void NativeRenderer_PresentVRAMRect(int x, int y, int w, int h);
 void NativeRenderer_SaveVRAM(const char *outputFileName, int x, int y, int width, int height, int readFromFramebuffer);

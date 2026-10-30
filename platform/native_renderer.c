@@ -8,6 +8,7 @@
 #include "platform/native_renderer_types.h"
 #include <SDL3/SDL.h>
 
+#include "platform/native_display.h"
 #include "platform/native_gpu.h"
 #include "platform/native_glad.h"
 #include "platform/native_log.h"
@@ -108,6 +109,18 @@ struct NativeRenderTarget
 global_variable struct NativeRenderTarget s_mainRenderTarget;
 global_variable struct NativeRenderTarget s_offscreenRenderTarget;
 
+// NOTE: The main target holds the PS1 display plus optional widescreen side
+// extensions, drawn at an integer render scale. Units below are PS1 pixels.
+struct NativeMainTargetLayout
+{
+	s32 displayW;
+	s32 displayH;
+	s32 sideExtension;
+	s32 scale;
+};
+
+global_variable struct NativeMainTargetLayout s_mainLayout = {1, 1, 0, 1};
+
 global_variable TextureID s_whiteTexture = (TextureID)-1;
 global_variable TextureID s_lastBoundTexture = (TextureID)-1;
 
@@ -137,6 +150,7 @@ int g_cfg_bilinearFiltering = 0;
 // texture on the GPU instead of a GPU-to-CPU-to-GPU round trip.
 global_variable GLuint s_packShader = 0;
 global_variable GLint s_packFlipYLoc = -1;
+global_variable GLint s_packSourceUVLoc = -1;
 global_variable GLuint s_presentVramShader = 0;
 global_variable GLint s_presentVramSourceRectLoc = -1;
 global_variable GLuint s_vramQuadVAO = 0;
@@ -556,8 +570,63 @@ internal void NativeRenderer_BindMainRenderTarget(void)
 		height = activeDrawEnv.clip.h;
 	}
 
-	NativeRenderer_EnsureRenderTarget(&s_mainRenderTarget, width, height);
+	if (width < 1)
+	{
+		width = 1;
+	}
+	if (height < 1)
+	{
+		height = 1;
+	}
+
+	s32 scale = NativeDisplay_GetRenderScaleOverride();
+	if (scale <= 0)
+	{
+		// Auto: the smallest integer scale that covers the presented height.
+		scale = (s_presentViewport.h + height - 1) / height;
+	}
+	if (scale < 1)
+	{
+		scale = 1;
+	}
+	if (scale > NATIVE_DISPLAY_MAX_RENDER_SCALE)
+	{
+		scale = NATIVE_DISPLAY_MAX_RENDER_SCALE;
+	}
+
+	s_mainLayout.displayW = width;
+	s_mainLayout.displayH = height;
+	s_mainLayout.sideExtension = NativeDisplay_GetSideExtension(width);
+	s_mainLayout.scale = scale;
+
+	NativeRenderer_EnsureRenderTarget(&s_mainRenderTarget, (width + 2 * s_mainLayout.sideExtension) * scale, height * scale);
 	glBindFramebuffer(GL_FRAMEBUFFER, s_mainRenderTarget.framebuffer);
+}
+
+// NOTE: Map a display-relative PS1 rectangle to a GL scissor box on the main
+// target. In widescreen, edges that touch the 4:3 display border extend into
+// the side areas, so full-width draw areas cover the whole 16:9 frame.
+internal void NativeRenderer_MainTargetScissorBox(s32 left, s32 top, s32 right, s32 bottom, GLint *box)
+{
+	const s32 extension = s_mainLayout.sideExtension;
+	const s32 scale = s_mainLayout.scale;
+
+	if (extension > 0)
+	{
+		if (left <= 0)
+		{
+			left = -extension;
+		}
+		if (right >= s_mainLayout.displayW)
+		{
+			right = s_mainLayout.displayW + extension;
+		}
+	}
+
+	box[0] = (left + extension) * scale;
+	box[1] = (s_mainLayout.displayH - bottom) * scale;
+	box[2] = (right - left) * scale;
+	box[3] = (bottom - top) * scale;
 }
 
 internal void NativeRenderer_DrawVRAMRegion(int x, int y, int width, int height)
@@ -582,8 +651,28 @@ internal void NativeRenderer_LoadRenderTargetFromVRAM(struct NativeRenderTarget 
 	glDisable(GL_BLEND);
 	glDisable(GL_SCISSOR_TEST);
 	glDisable(GL_STENCIL_TEST);
-	glViewport(0, 0, target->width, target->height);
-	NativeRenderer_DrawVRAMRegion(x, y, target->width, target->height);
+	if (target == &s_mainRenderTarget)
+	{
+		const s32 scale = s_mainLayout.scale;
+
+		if (s_mainLayout.sideExtension > 0)
+		{
+			GLfloat previousClearColor[4];
+			glGetFloatv(GL_COLOR_CLEAR_VALUE, previousClearColor);
+			glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+			glClear(GL_COLOR_BUFFER_BIT);
+			glClearColor(previousClearColor[0], previousClearColor[1], previousClearColor[2], previousClearColor[3]);
+		}
+
+		glViewport(s_mainLayout.sideExtension * scale, 0, s_mainLayout.displayW * scale, s_mainLayout.displayH * scale);
+		NativeRenderer_DrawVRAMRegion(x, y, s_mainLayout.displayW, s_mainLayout.displayH);
+		glViewport(0, 0, target->width, target->height);
+	}
+	else
+	{
+		glViewport(0, 0, target->width, target->height);
+		NativeRenderer_DrawVRAMRegion(x, y, target->width, target->height);
+	}
 	glClear(GL_STENCIL_BUFFER_BIT);
 	glEnable(GL_STENCIL_TEST);
 
@@ -692,7 +781,7 @@ internal void NativeRenderer_Ortho2D(float left, float right, float bottom, floa
 internal void NativeRenderer_SetShader(const ShaderID shader);
 internal void NativeRenderer_SyncGpuVRAMToCPU(int x, int y, int w, int h);
 internal void NativeRenderer_ResolveVRAMRead(int x, int y, int w, int h);
-internal void NativeRenderer_GpuPackTextureToVRAM(TextureID sourceTexture, int x, int y, int w, int h, b32 flipY);
+internal void NativeRenderer_GpuPackTextureToVRAM(TextureID sourceTexture, const float *sourceUV, int x, int y, int w, int h, b32 flipY);
 
 global_variable GTEShader s_gteShader4;
 global_variable GTEShader s_gteShader8;
@@ -1070,9 +1159,11 @@ global_variable const char *ctr_pack_shader = "#ifdef VERTEX\n"
                                               "attribute vec2 a_position;\n"
                                               "varying vec2 v_uv;\n"
                                               "uniform int flipY;\n"
+                                              "uniform vec4 sourceUV;\n"
                                               "void main() {\n"
                                               "	v_uv = a_position * 0.5 + 0.5;\n"
                                               "	if (flipY != 0) { v_uv.y = 1.0 - v_uv.y; }\n"
+                                              "	v_uv = sourceUV.xy + v_uv * sourceUV.zw;\n"
                                               "	gl_Position = vec4(a_position, 0.0, 1.0);\n"
                                               "}\n"
                                               "#endif\n"
@@ -1120,6 +1211,7 @@ internal void NativeRenderer_InitVRAMPipelines(void)
 	glUseProgram(s_packShader);
 	const GLint packSrcLoc = glGetUniformLocation(s_packShader, "s_src");
 	s_packFlipYLoc = glGetUniformLocation(s_packShader, "flipY");
+	s_packSourceUVLoc = glGetUniformLocation(s_packShader, "sourceUV");
 	glUniform1i(packSrcLoc, 0);
 	glUseProgram(0);
 
@@ -1302,40 +1394,14 @@ void NativeRenderer_SetupClipMode(const RECT16 *rect, const DISPENV *displayEnv,
 		return;
 	}
 
-	const float emuScreenAspect = 1.0f;
+	// Normal game draws target the main framebuffer. Host-window coordinates are
+	// introduced only by the final presentation pass.
+	GLint box[4];
+	const s32 left = rect->x - displayEnv->disp.x;
+	const s32 top = rect->y - displayEnv->disp.y;
 
-	const float psxScreenWInv = 1.0f / (float)displayEnv->disp.w;
-	const float psxScreenHInv = 1.0f / (float)displayEnv->disp.h;
-
-	// first map to 0..1
-	float clipRectX = (float)(rect->x - displayEnv->disp.x) * psxScreenWInv;
-	float clipRectY = (float)(rect->y - displayEnv->disp.y) * psxScreenHInv;
-	float clipRectW = (float)(rect->w) * psxScreenWInv;
-	float clipRectH = (float)(rect->h) * psxScreenHInv;
-
-	// then map to screen
-	{
-		clipRectX -= 0.5f;
-
-		clipRectX *= emuScreenAspect;
-		clipRectW *= emuScreenAspect;
-
-		clipRectX += 0.5f;
-	}
-
-	// Normal game draws target the PSX-sized main framebuffer. Host-window
-	// coordinates are introduced only by the final presentation pass.
-	const float viewportX = 0.0f;
-	const float viewportY = 0.0f;
-	const float viewportW = (float)displayEnv->disp.w;
-	const float viewportH = (float)displayEnv->disp.h;
-	const float flipOffset = viewportY + viewportH - clipRectH * viewportH;
-	const float crx = viewportX + clipRectX * viewportW;
-	const float cry = clipRectY * viewportH;
-	const float crw = clipRectW * viewportW;
-	const float crh = clipRectH * viewportH;
-
-	glScissor(crx, flipOffset - cry, crw, crh);
+	NativeRenderer_MainTargetScissorBox(left, top, left + rect->w, top + rect->h, box);
+	glScissor(box[0], box[1], box[2], box[3]);
 }
 
 internal void NativeRenderer_SetShader(const ShaderID shader)
@@ -1688,14 +1754,10 @@ void NativeRenderer_Clear(int x, int y, int w, int h, u8 r, u8 g, u8 b)
 		return;
 	}
 
-	const int relX = overlapX - displayX;
-	const int relBottom = overlapBottom - displayY;
-	const int scissorX = relX;
-	const int scissorY = displayH - relBottom;
-	const int scissorW = overlapRight - overlapX;
-	const int scissorH = overlapBottom - overlapY;
+	GLint box[4];
+	NativeRenderer_MainTargetScissorBox(overlapX - displayX, overlapY - displayY, overlapRight - displayX, overlapBottom - displayY, box);
 
-	if ((scissorW <= 0) || (scissorH <= 0))
+	if ((box[2] <= 0) || (box[3] <= 0))
 	{
 		return;
 	}
@@ -1705,7 +1767,7 @@ void NativeRenderer_Clear(int x, int y, int w, int h, u8 r, u8 g, u8 b)
 	glGetIntegerv(GL_SCISSOR_BOX, previousScissorBox);
 
 	glEnable(GL_SCISSOR_TEST);
-	glScissor(scissorX, scissorY, scissorW, scissorH);
+	glScissor(box[0], box[1], box[2], box[3]);
 	glClearColor(NativeRenderer_PSXColorComponentFloat(r), NativeRenderer_PSXColorComponentFloat(g), NativeRenderer_PSXColorComponentFloat(b), 0.0f);
 	glClear(GL_COLOR_BUFFER_BIT);
 
@@ -1850,7 +1912,8 @@ internal void NativeRenderer_FlushOffscreenToVRAM(void)
 
 	// NOTE(aalhendi): Native offscreen draws produce RGBA pixels. Pack them into
 	// the persistent 5:5:5:1 VRAM texture instead of reading them through the CPU.
-	NativeRenderer_GpuPackTextureToVRAM(s_offscreenRenderTarget.texture, s_previousOffscreen.x, s_previousOffscreen.y, s_previousOffscreen.w,
+	local_persist const float wholeTexture[4] = {0.0f, 0.0f, 1.0f, 1.0f};
+	NativeRenderer_GpuPackTextureToVRAM(s_offscreenRenderTarget.texture, wholeTexture, s_previousOffscreen.x, s_previousOffscreen.y, s_previousOffscreen.w,
 	                                    s_previousOffscreen.h, true);
 }
 
@@ -1917,13 +1980,14 @@ void NativeRenderer_SetProjection(const RECT16 *drawRect, const DISPENV *display
 
 	const int displayW = displayEnv->disp.w > 0 ? displayEnv->disp.w : 1;
 	const int displayH = displayEnv->disp.h > 0 ? displayEnv->disp.h : 1;
-	NativeRenderer_Ortho2D(0, displayW, displayH, 0, -1.0f, 1.0f);
+	const int extension = NativeDisplay_GetSideExtension(displayW);
+	NativeRenderer_Ortho2D((float)-extension, (float)(displayW + extension), displayH, 0, -1.0f, 1.0f);
 }
 
 // NOTE(aalhendi): Pack an RGBA render texture straight into the RG8 VRAM texture
 // on the GPU, no CPU round trip. Restore or invalidate the render-state caches
 // disturbed by this native bridge before the submit run continues.
-internal void NativeRenderer_GpuPackTextureToVRAM(TextureID sourceTexture, int x, int y, int w, int h, b32 flipY)
+internal void NativeRenderer_GpuPackTextureToVRAM(TextureID sourceTexture, const float *sourceUV, int x, int y, int w, int h, b32 flipY)
 {
 	const ShaderID previousShader = s_previousShader;
 	const TextureID previousTexture = s_lastBoundTexture;
@@ -1942,6 +2006,7 @@ internal void NativeRenderer_GpuPackTextureToVRAM(TextureID sourceTexture, int x
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, sourceTexture);
 	glUniform1i(s_packFlipYLoc, flipY);
+	glUniform4f(s_packSourceUVLoc, sourceUV[0], sourceUV[1], sourceUV[2], sourceUV[3]);
 
 	glBindVertexArray(s_vramQuadVAO);
 	NativeRenderer_DrawTriangles(0, 2);
@@ -1985,7 +2050,10 @@ void NativeRenderer_StoreFrameBuffer(int x, int y, int w, int h)
 {
 	NativePerf_BeginScope(NATIVE_PERF_BUCKET_FRAMEBUFFER_STORE);
 
-	NativeRenderer_GpuPackTextureToVRAM(s_mainRenderTarget.texture, x, y, w, h, true);
+	// Only the 4:3 display region exists in PS1 VRAM; widescreen sides stay host-only.
+	const float totalW = (float)(s_mainLayout.displayW + 2 * s_mainLayout.sideExtension);
+	const float displayUV[4] = {(float)s_mainLayout.sideExtension / totalW, 0.0f, (float)s_mainLayout.displayW / totalW, 1.0f};
+	NativeRenderer_GpuPackTextureToVRAM(s_mainRenderTarget.texture, displayUV, x, y, w, h, true);
 
 	NativePerf_EndScope(NATIVE_PERF_BUCKET_FRAMEBUFFER_STORE);
 }
@@ -2111,18 +2179,51 @@ void NativeRenderer_PresentVRAMRect(int displayX, int displayY, int displayW, in
 
 	NativeRenderer_UpdateVRAM();
 
-	NativeRenderer_SetViewPort(s_presentViewport.x, s_presentViewport.y, s_presentViewport.w, s_presentViewport.h);
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 	NativeRenderer_SetScissorState(0);
 	NativeRenderer_EnableDepth(0);
 	NativeRenderer_SetBlendMode(BM_NONE);
 
+	// VRAM-only screens (boot splash, video) have no widescreen sides: show them
+	// 4:3 in the middle of the presentation area.
+	SDL_Rect viewport = s_presentViewport;
+	if (NativeDisplay_GetSideExtension(displayW) > 0)
+	{
+		const int pillarW = (viewport.h * 4) / 3;
+		if (pillarW < viewport.w)
+		{
+			GLfloat previousClearColor[4];
+			glGetFloatv(GL_COLOR_CLEAR_VALUE, previousClearColor);
+			glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+			glClear(GL_COLOR_BUFFER_BIT);
+			glClearColor(previousClearColor[0], previousClearColor[1], previousClearColor[2], previousClearColor[3]);
+
+			viewport.x += (viewport.w - pillarW) / 2;
+			viewport.w = pillarW;
+		}
+	}
+	NativeRenderer_SetViewPort(viewport.x, viewport.y, viewport.w, viewport.h);
+
 	NativeRenderer_DrawVRAMRegion(displayX, displayY, displayW, displayH);
 	glBindVertexArray(0);
 
 	s_previousShader = (ShaderID)-1;
 	s_lastBoundTexture = (TextureID)-1;
+}
+
+void NativeRenderer_PresentMainTarget(void)
+{
+	NativeRenderer_SetScissorState(0);
+
+	// NOTE: Present the (possibly upscaled, possibly widescreen) main target
+	// directly; its packed VRAM copy is PS1-resolution and 4:3 only.
+	glBindFramebuffer(GL_READ_FRAMEBUFFER, s_mainRenderTarget.framebuffer);
+	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+	glBlitFramebuffer(0, 0, s_mainRenderTarget.width, s_mainRenderTarget.height, s_presentViewport.x, s_presentViewport.y,
+	                  s_presentViewport.x + s_presentViewport.w, s_presentViewport.y + s_presentViewport.h, GL_COLOR_BUFFER_BIT,
+	                  (s_mainRenderTarget.width == s_presentViewport.w) ? GL_NEAREST : GL_LINEAR);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 void NativeRenderer_PresentVRAMDisplay(void)

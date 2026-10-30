@@ -3,6 +3,7 @@
 #include <macros.h>
 
 #include "platform/native_audio.h"
+#include "platform/native_display.h"
 #include "platform/native_glad.h"
 #include "platform/native_gpu.h"
 #include "platform/native_input.h"
@@ -249,7 +250,7 @@ void Platform_Init(const char *title, int width, int height)
 
 	s_platformInitialized = 1;
 
-	if (!NativeRenderer_InitialiseRender(windowName, width, height, 0))
+	if (!NativeRenderer_InitialiseRender(windowName, width, height, NativeDisplay_IsFullscreen()))
 	{
 		Platform_LogError("[CTR Native] Failed to initialise window\n");
 		Platform_Shutdown();
@@ -372,7 +373,7 @@ void Platform_EndScene(void)
 	// NOTE(aalhendi): Keep the displayed VRAM region current for screen-copy
 	// effects without forcing a CPU readback.
 	NativeRenderer_StoreFrameBuffer(activeDispEnv.disp.x, activeDispEnv.disp.y, activeDispEnv.disp.w, activeDispEnv.disp.h);
-	NativeRenderer_PresentVRAMRect(activeDispEnv.disp.x, activeDispEnv.disp.y, activeDispEnv.disp.w, activeDispEnv.disp.h);
+	NativeRenderer_PresentMainTarget();
 	NativeRenderer_EndGpuFrame();
 	NativeRenderer_SwapWindow();
 	NativePerf_EndScope(NATIVE_PERF_BUCKET_PLATFORM_END_SCENE);
