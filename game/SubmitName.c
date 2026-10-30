@@ -316,6 +316,11 @@ s16 SubmitName_DrawMenu(u16 string)
 								s16 drawFlags = (s16)keyBlink;
 								register s32 normalizedFlags CTR_PSX_REGISTER("$2") = (s16)drawFlags;
 								CTR_PSX_OBSERVE_VALUE(normalizedFlags);
+#if defined(CTR_NATIVE)
+								// NOTE: MSVC has no GCC statement expressions; native evaluates the coordinate trees directly.
+								DecalFont_DrawLine(keyboardString, (s16)column * SUBMIT_NAME_KEY_SPACING_X + SUBMIT_NAME_TITLE_X - (SUBMIT_NAME_KEYBOARD_WIDTH >> 1),
+								                   SUBMIT_NAME_KEYBOARD_START_Y + signedRow * SUBMIT_NAME_KEY_SPACING_Y, FONT_BIG, drawFlags);
+#else
 								DecalFont_DrawLine(keyboardString, (s16)column * SUBMIT_NAME_KEY_SPACING_X + SUBMIT_NAME_TITLE_X - ({
 									                                   u32 loadedWidth;
 									                                   u32 width;
@@ -341,6 +346,7 @@ s16 SubmitName_DrawMenu(u16 string)
 									                   drawY;
 								                   }),
 								                   FONT_BIG, drawFlags);
+#endif
 							}
 							nextColumn = column + 1;
 							CTR_PSX_KEEP_VALUE_RELAXED(nextColumn);
