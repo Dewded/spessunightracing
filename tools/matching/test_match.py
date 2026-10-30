@@ -242,7 +242,7 @@ class ToolchainTests(unittest.TestCase):
             [
                 "mips-as",
                 "-G0",
-                "-Igame/RenderLevel/psx",
+                f"-I{Path('game/RenderLevel/psx')}",
                 "--MD",
                 "renderer.d",
                 "-o",
