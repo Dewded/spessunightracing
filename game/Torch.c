@@ -265,6 +265,9 @@ static void Torch_WriteUvPair(enum TorchUvSlot slot, struct TorchPointSource sou
 	u16 y = Torch_ClampPackedCoord((u16)(point >> 16), scratch->maxY);
 	s32 u = (s32)x - (s32)(u8)scratch->tileUBase + scratch->rectX;
 	s32 v = (s32)y + scratch->rectYWithSwapchain;
+#if defined(CTR_NATIVE)
+	u = Torch_ClampSignedCoord((s32)x + scratch->rectX, SCREEN_WIDTH - 1) - (s32)(u8)scratch->tileUBase;
+#endif
 
 	switch (slot)
 	{
@@ -387,6 +390,11 @@ static void Torch_Subset3_SetTpage(s32 x, s32 y)
 
 	x = Torch_ClampSignedCoord(x, maxX);
 	x += scratch->rectX;
+#if defined(CTR_NATIVE)
+	// Widescreen views start left of the PS1 framebuffer page; keep the heat
+	// warp sampling the stored 4:3 frame instead of wrapping into texture VRAM.
+	x = Torch_ClampSignedCoord(x, SCREEN_WIDTH - 1);
+#endif
 
 	y = Torch_ClampSignedCoord(y, maxY);
 	y += scratch->rectYWithSwapchain;
