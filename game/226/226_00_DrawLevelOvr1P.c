@@ -631,6 +631,17 @@ static struct TextureLayout *DrawLevelOvr1P_ResolveProjectedMidTexture(const str
 
 	// NOTE(aalhendi): Retail selector bodies load raw `quad+0x1c+slot`.
 	// Native validates the host-rebased word before following it.
+#ifdef CTR_NATIVE
+	// A word the loader patched is a real texture/AnimTex pointer, as on PS1, so
+	// follow it directly. The plausibility check below rejected valid layouts
+	// with flag bits in tpage (e.g. animated boost pads and waterfalls), which
+	// sent those faces to a fallback texture.
+	const void *textureSlot = (const u8 *)block + 0x1c + slotWord;
+	if (Platform_QueryPointerSlot(textureSlot) == 1)
+	{
+		return DrawLevelOvr1P_ResolveTexturePointer(DrawLevelOvr1P_ReadPackedWord((const u8 *)textureSlot));
+	}
+#endif
 	return DrawLevelOvr1P_ResolveTexturePointerChecked((u32) * (void *const *)((const u8 *)block + 0x1c + slotWord));
 }
 
