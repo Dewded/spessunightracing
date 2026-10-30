@@ -583,6 +583,11 @@ void MM_Characters_SetMenuLayout(void)
 	s16 iconIndex;
 	s16 unlocked;
 
+#if defined(CTR_NATIVE)
+	// Special Nights: every racer is selectable from the start, same as entering every unlock cheat.
+	GAME_PROGRESS.unlocks[0] |= UNLOCK_CHARACTERS;
+#endif
+
 	expandRoster = false;
 	iconIndex = MM_CHARACTER_SELECT_EXPANSION_ICON_FIRST;
 	progress = &GAME_PROGRESS;
