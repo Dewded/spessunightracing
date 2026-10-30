@@ -76,6 +76,67 @@ int Platform_GetMempackBackingSize(void)
 	return (int)sizeof(s_mempackMemory);
 }
 
+#define NATIVE_POINTER_SLOT_WORDS (CTR_NATIVE_MEMPACK_BUFFER_SIZE / sizeof(u32))
+
+global_variable u32 s_pointerSlotBits[NATIVE_POINTER_SLOT_WORDS / 32];
+
+internal int Platform_PointerSlotIndex(const void *slot, u32 *indexOut)
+{
+	const uintptr_t base = (uintptr_t)&s_mempackMemory[0];
+	const uintptr_t address = (uintptr_t)slot;
+
+	if ((address < base) || (address >= base + sizeof(s_mempackMemory)))
+	{
+		return 0;
+	}
+
+	*indexOut = (u32)((address - base) / sizeof(u32));
+	return 1;
+}
+
+void Platform_ClearPointerSlots(const void *start, u32 size)
+{
+	u32 first;
+	u32 last;
+
+	if ((size == 0) || !Platform_PointerSlotIndex(start, &first))
+	{
+		return;
+	}
+
+	if (!Platform_PointerSlotIndex((const u8 *)start + size - 1, &last))
+	{
+		last = NATIVE_POINTER_SLOT_WORDS - 1;
+	}
+
+	for (u32 index = first; index <= last; index++)
+	{
+		s_pointerSlotBits[index >> 5] &= ~(1u << (index & 31));
+	}
+}
+
+void Platform_MarkPointerSlot(const void *slot)
+{
+	u32 index;
+
+	if (Platform_PointerSlotIndex(slot, &index))
+	{
+		s_pointerSlotBits[index >> 5] |= 1u << (index & 31);
+	}
+}
+
+int Platform_QueryPointerSlot(const void *slot)
+{
+	u32 index;
+
+	if (!Platform_PointerSlotIndex(slot, &index))
+	{
+		return -1;
+	}
+
+	return (s_pointerSlotBits[index >> 5] >> (index & 31)) & 1;
+}
+
 void Platform_RepairResidentPointers(s32 activeMempackIndex)
 {
 	if ((activeMempackIndex < 0) || (activeMempackIndex >= 4))
