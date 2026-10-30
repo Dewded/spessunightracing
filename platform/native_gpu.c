@@ -1788,22 +1788,23 @@ internal void ProcessDrawEnvCommand(u32 code)
 internal int ProcessPsyXPrims(P_TAG *polyTag)
 {
 	const int primSubType = polyTag->code & 0x0F;
+	local_persist b32 s_reportedStrayPacket = false;
 
+	// NOTE: CTR never emits Psy-X texture override or debug marker packets
+	// (SetPsyXTexture has no callers). Honouring a stray 0xB1 word made the
+	// override texture stick for the rest of the session, so every textured
+	// draw sampled whatever texture was last bound (usually white). Skip them.
 	switch (primSubType)
 	{
 	case 0x01:
-	{
-		DR_PSYX_TEX *psytex = (DR_PSYX_TEX *)polyTag;
-		s_gpu.overrideTexture = psytex->code[0] & 0xFFFFFF;
-		s_gpu.overrideTextureWidth = psytex->code[1] & 0xFFF;
-		s_gpu.overrideTextureHeight = psytex->code[1] >> 16 & 0xFFF;
-		return 2;
-	}
 	case 0x02:
 	{
-		// [A] Psy-X custom debug marker packet
-		DR_PSYX_DBGMARKER *psydbg = (DR_PSYX_DBGMARKER *)polyTag;
-		s_gpu.currentSplitDebugText = psydbg->text;
+		if (!s_reportedStrayPacket)
+		{
+			const u32 *words = (const u32 *)&polyTag->pad0;
+			s_reportedStrayPacket = true;
+			NATIVE_GPU_ERROR("ignoring stray Psy-X packet code=%02x len=%d words=%08x %08x\n", polyTag->code, polyTag->len, words[0], words[1]);
+		}
 		return 2;
 	}
 	}
