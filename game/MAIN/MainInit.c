@@ -481,9 +481,9 @@ void MainInit_FinalizeInit(struct GameTracker *gGT)
 	PushBuffer_Init(&gGT->pushBuffer[3], 3, numPlyr);
 #if defined(CTR_NATIVE)
 	// Special Nights widescreen: 3D views grow at the screen borders; pushBuffer_UI keeps the 4:3 HUD layout.
-	for (int i = 0; i < 4; i++)
+	for (int viewIndex = 0; viewIndex < 4; viewIndex++)
 	{
-		NativeDisplay_WidenViewport(&gGT->pushBuffer[i].rect.x, &gGT->pushBuffer[i].rect.w, SCREEN_WIDTH);
+		NativeDisplay_WidenViewport(&gGT->pushBuffer[viewIndex].rect.x, &gGT->pushBuffer[viewIndex].rect.w, SCREEN_WIDTH);
 	}
 #endif
 
