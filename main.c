@@ -20,6 +20,7 @@
 
 #include "platform/native_assets.h"
 #include "platform/native_display.h"
+#include "platform/native_quickstart.h"
 #include "platform/native_log.h"
 #include "platform/native_memory.h"
 #include "platform/native_perf.h"
@@ -44,6 +45,7 @@
 #include "platform/native_checkpoint_file.c"
 #include "platform/native_cd.c"
 #include "platform/native_display.c"
+#include "platform/native_quickstart.c"
 #include "platform/native_gpu_links.c"
 #include "platform/native_gpu.c"
 #include "platform/native_gte_core.c"
@@ -185,7 +187,7 @@ int main(int argc, char *argv[])
 	}
 #endif
 
-	if (NativeDisplay_ConfigureFromArgs(argc, argv) != 0)
+	if ((NativeDisplay_ConfigureFromArgs(argc, argv) != 0) || (NativeQuickStart_ConfigureFromArgs(argc, argv) != 0))
 	{
 		return NativeConsole_Return(1);
 	}

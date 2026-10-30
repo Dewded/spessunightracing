@@ -29,6 +29,7 @@ int Platform_PollInput(void);
 
 #if defined(CTR_NATIVE)
 #include "platform/native_display.h"
+#include "platform/native_quickstart.h"
 
 int NikoGetEnterKey(void);
 #endif

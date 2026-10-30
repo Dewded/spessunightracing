@@ -181,6 +181,14 @@ picture at the left and right edges, while the HUD, menus and videos keep their 
 
 `--scale 1 --4x3` reproduces the original presentation.
 
+## Debug Quick Start
+
+`--track <name|number>` skips the menus and boots straight into a 1-player medium Arcade race after the Naughty Dog
+crate. `--character <name|number>` picks the racer (default Crash). Names ignore case and punctuation and may be
+shortened, e.g. `--track "Crash Cove"`, `--track blizzard`, `--character pura`.
+
+Set `CTR_GPU_TRACE=1` to log every write into PS1 VRAM (uploads, copies, fills, GPU packs) to the console and log file.
+
 ## Bug Replays
 
 Internal builds can record a small bug report folder. See `docs/REPLAYS.md`.

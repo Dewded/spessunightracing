@@ -121,6 +121,33 @@ struct NativeMainTargetLayout
 
 global_variable struct NativeMainTargetLayout s_mainLayout = {1, 1, 0, 1};
 
+// NOTE: Opt-in VRAM write trace (set CTR_GPU_TRACE=1). Logs uploads, copies,
+// fills and GPU packs into PS1 VRAM, except the per-frame display store.
+#define NATIVE_VRAM_TRACE_LINE_BUDGET 6000
+global_variable s32 s_vramTraceBudget = -1;
+global_variable u32 s_vramTraceFrame;
+
+internal b32 NativeRenderer_VramTraceEnabled(void)
+{
+	if (s_vramTraceBudget < 0)
+	{
+		const char *value = SDL_getenv("CTR_GPU_TRACE");
+		s_vramTraceBudget = ((value != NULL) && (value[0] != '\0') && (value[0] != '0')) ? NATIVE_VRAM_TRACE_LINE_BUDGET : 0;
+	}
+
+	return s_vramTraceBudget > 0;
+}
+
+#define NATIVE_VRAM_TRACE(fmt, ...)                                                    \
+	do                                                                                 \
+	{                                                                                  \
+		if (NativeRenderer_VramTraceEnabled())                                         \
+		{                                                                              \
+			s_vramTraceBudget--;                                                       \
+			Platform_Log("[CTR VRAM] frame=%u " fmt, s_vramTraceFrame, __VA_ARGS__); \
+		}                                                                              \
+	} while (0)
+
 global_variable TextureID s_whiteTexture = (TextureID)-1;
 global_variable TextureID s_lastBoundTexture = (TextureID)-1;
 
@@ -352,6 +379,7 @@ void NativeRenderer_BeginScene(void)
 #endif
 
 	NativePerf_BeginScope(NATIVE_PERF_BUCKET_RENDERER_BEGIN_SCENE);
+	s_vramTraceFrame++;
 	s_lastBoundTexture = 0;
 
 	NativeRenderer_UpdatePresentationViewport();
@@ -1685,18 +1713,23 @@ internal void NativeRenderer_MarkGpuVRAMNewer(int x, int y, int w, int h)
 
 void NativeRenderer_ClearVRAM(int x, int y, int w, int h, u8 r, u8 g, u8 b)
 {
+	RECT16 clipped;
+
+	NATIVE_VRAM_TRACE("fill rect=%d,%d %dx%d rgb=%02x%02x%02x\n", x, y, w, h, r, g, b);
+
+	// Negative origins previously indexed before the row start, wrapping into
+	// the far-right texture/CLUT columns of the preceding rows.
+	if (!NativeRenderer_ClipVRAMRect(&clipped, x, y, w, h))
+	{
+		return;
+	}
+	x = clipped.x;
+	y = clipped.y;
+	w = clipped.w;
+	h = clipped.h;
+
 	u16 *dst = s_vram.cpuPixels + x + y * VRAM_WIDTH;
 	const u16 color = NativeRenderer_PackRGB24ToPSX15(r, g, b);
-
-	if (x + w > VRAM_WIDTH)
-	{
-		w = VRAM_WIDTH - x;
-	}
-
-	if (y + h > VRAM_HEIGHT)
-	{
-		h = VRAM_HEIGHT - y;
-	}
 
 	// clear VRAM region with given color
 	for (int i = 0; i < h; i++)
@@ -1996,6 +2029,11 @@ internal void NativeRenderer_GpuPackTextureToVRAM(TextureID sourceTexture, const
 
 	NativeRenderer_UpdateVRAM();
 
+	if ((x != activeDispEnv.disp.x) || (y != activeDispEnv.disp.y) || (w != activeDispEnv.disp.w) || (h != activeDispEnv.disp.h))
+	{
+		NATIVE_VRAM_TRACE("gpu-pack src=%s rect=%d,%d %dx%d\n", (sourceTexture == s_mainRenderTarget.texture) ? "main" : "offscreen", x, y, w, h);
+	}
+
 	glBindFramebuffer(GL_FRAMEBUFFER, s_glVramFramebuffer);
 
 	glDisable(GL_BLEND);
@@ -2061,9 +2099,28 @@ void NativeRenderer_StoreFrameBuffer(int x, int y, int w, int h)
 void NativeRenderer_CopyVRAM(u16 *src, int x, int y, int w, int h, int dst_x, int dst_y)
 {
 	int stride = w;
+	RECT16 clipped;
+
+	NATIVE_VRAM_TRACE("%s src=%d,%d dst=%d,%d %dx%d\n", src ? "upload" : "move", x, y, dst_x, dst_y, w, h);
+
+	if (!NativeRenderer_ClipVRAMRect(&clipped, dst_x, dst_y, w, h))
+	{
+		return;
+	}
+	x += clipped.x - dst_x;
+	y += clipped.y - dst_y;
+	dst_x = clipped.x;
+	dst_y = clipped.y;
+	w = clipped.w;
+	h = clipped.h;
 
 	if (!src)
 	{
+		if ((x < 0) || (y < 0) || (x + w > VRAM_WIDTH) || (y + h > VRAM_HEIGHT))
+		{
+			return;
+		}
+
 		// NOTE(aalhendi): MoveImage reads exactly its PS1 VRAM source rectangle. Resolve only that
 		// GPU-authored region into the CPU mirror before copying it.
 		NativeRenderer_ResolveVRAMRead(x, y, w, h);
