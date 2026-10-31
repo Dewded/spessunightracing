@@ -2260,7 +2260,11 @@ void VehStuckProc_Warp_Init(struct Thread *th, struct Driver *d)
 	OtherFX_Stop1((int)d->driverAudioPtrs[0]);
 	d->driverAudioPtrs[0] = 0;
 
+#if defined(CTR_NATIVE)
+	engine = SpecialNights_DriverEngineClass(d->driverID);
+#else
 	engine = GAME_CHARACTER_METADATA[GAME_CHARACTER_IDS[d->driverID]].engineID;
+#endif
 
 	EngineAudio_Stop((u16)((engine * VEH_WARP_ENGINE_AUDIO_STRIDE) + d->driverID));
 

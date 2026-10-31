@@ -664,7 +664,11 @@ void VehBirth_SetConsts(struct Driver *driver)
 		{
 		case 1:
 			driverFieldOffset = metaPhys->offset;
+#if defined(CTR_NATIVE)
+			engineValueOffset = SpecialNights_DriverEngineClass(driver->driverID) * sizeof(s32);
+#else
 			engineValueOffset = characterMetadata[characterIDs[driver->driverID]].engineID * sizeof(s32);
+#endif
 			engineValueOffset += metaPhysByteOffset;
 			metaPhysValue = (u8 *)((size_t)engineValueOffset + (size_t)metaPhysBase);
 			driverField = (u8 *)driver + driverFieldOffset;
@@ -673,7 +677,11 @@ void VehBirth_SetConsts(struct Driver *driver)
 
 		case 2:
 			driverFieldOffset = metaPhys->offset;
+#if defined(CTR_NATIVE)
+			engineValueOffset = SpecialNights_DriverEngineClass(driver->driverID) * sizeof(s32);
+#else
 			engineValueOffset = characterMetadata[characterIDs[driver->driverID]].engineID * sizeof(s32);
+#endif
 			engineValueOffset += metaPhysByteOffset;
 			metaPhysValue = (u8 *)((size_t)engineValueOffset + (size_t)metaPhysBase);
 			driverField = (u8 *)driver + driverFieldOffset;
@@ -682,7 +690,11 @@ void VehBirth_SetConsts(struct Driver *driver)
 
 		case 4:
 			driverFieldOffset = metaPhys->offset;
+#if defined(CTR_NATIVE)
+			engineValueOffset = SpecialNights_DriverEngineClass(driver->driverID) * sizeof(s32);
+#else
 			engineValueOffset = characterMetadata[characterIDs[driver->driverID]].engineID * sizeof(s32);
+#endif
 			engineValueOffset += metaPhysByteOffset;
 			metaPhysValue = (u8 *)((size_t)engineValueOffset + (size_t)metaPhysBase);
 			driverField = (u8 *)driver + driverFieldOffset;
@@ -704,7 +716,11 @@ void VehBirth_EngineAudio_AllPlayers(void)
 	{
 		d = th->object;
 		driverID = d->driverID;
+#if defined(CTR_NATIVE)
+		engine = SpecialNights_DriverEngineClass(driverID);
+#else
 		engine = GAME_CHARACTER_METADATA[GAME_CHARACTER_IDS[driverID]].engineID;
+#endif
 		CTR_PSX_MEMORY_BARRIER();
 		engine = (engine * 4) + driverID;
 

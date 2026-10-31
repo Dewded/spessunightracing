@@ -451,6 +451,11 @@ void MainInit_VRAMDisplay(void);
 void MainRaceTrack_StartLoad(s16 levelID);
 void MainRaceTrack_RequestLoad(s16 levelID);
 #if defined(CTR_NATIVE)
+void SpecialNights_CycleEngineClass(s32 playerIndex, u32 buttonTaps);
+s32 SpecialNights_DriverEngineClass(s32 driverID);
+void SpecialNights_DrawEngineClass(s32 playerIndex, s32 characterID, s32 posX, s32 posY, s32 fontType);
+#endif
+#if defined(CTR_NATIVE)
 s16 MainRaceTrack_QuickStartBootLevel(struct GameTracker *gt, s16 levelID);
 #endif
 

@@ -1016,6 +1016,14 @@ dontDrawSelectCharacter:
 
 		preInputCharacterMeta = &MM_ACTIVE_CHARACTER_SELECT_META[(s16)candidateIcon];
 
+#if defined(CTR_NATIVE)
+		// Special Nights: L1/R1 picks the engine class before the character is confirmed.
+		if ((MM_CHARACTER_SELECT_MENU_STATE == IN_MENU) && ((((int)(s16)MM_CHARACTER_SELECT_FLAGS >> playerIndex) & 1U) == 0))
+		{
+			SpecialNights_CycleEngineClass(playerIndex, MM_GAME_BUTTON_TAPS[playerIndex]);
+		}
+#endif
+
 		if ((MM_CHARACTER_SELECT_MENU_STATE == IN_MENU) &&
 		    // If you press the D-Pad, or Cross, Square, Triangle, Circle
 		    (((button = MM_GAME_BUTTON_TAPS[playerIndex]) & (MM_CHARACTER_SELECT_INPUT_DPAD | MM_CHARACTER_SELECT_INPUT_MENU)) != 0))
@@ -1514,6 +1522,11 @@ outerPlayerLoopComplete:
 
 				// draw string
 				DecalFont_DrawLine(*characterNameSlot, namePosX, namePosY, fontType, (JUSTIFY_CENTER | ORANGE));
+#if defined(CTR_NATIVE)
+				// Engine class one line under the name; above it for 4P bottom-row windows.
+				SpecialNights_DrawEngineClass(menuPlayerIndex, preInputCharacterMeta->characterID, namePosX,
+				                              ((numPlyrNextGame == 4) && (menuPlayerIndex >= 2)) ? (namePosY - 10) : (namePosY + 10), fontType);
+#endif
 			}
 
 			// spin the character

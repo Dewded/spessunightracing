@@ -181,6 +181,13 @@ picture at the left and right edges, while the HUD, menus and videos keep their 
 
 `--scale 1 --4x3` reproduces the original presentation.
 
+## Special Nights Mods
+
+- Every character is unlocked at character select.
+- **Engine class picker:** on character select, press **L1/R1** before confirming to choose a stat class for your kart:
+  the character's own (orange), or BALANCED, ACCEL, SPEED or TURN (white). Human players' karts use the chosen class's
+  stats and engine sound; AI racers keep their character's class. The choice is kept between races.
+
 ## Debug Quick Start
 
 `--track <name|number>` skips the boot intro and menus and loads straight into a 1-player medium Arcade race, without
