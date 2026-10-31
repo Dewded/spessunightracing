@@ -290,7 +290,8 @@ struct Model *SpecialNights_GetOxidePreviewModel(void)
 
 	LOAD_RunPtrMap((char *)fileData, offsets, dpm->numBytes >> 2);
 
-	model = (struct Model *)(fileData + LOAD_MODEL_FILE_HEADER_BYTES);
+	// Same as the race loader: model = raw file + LOAD_MODEL_FILE_HEADER_BYTES (the map offset word).
+	model = (struct Model *)(buffer + LOAD_MODEL_FILE_HEADER_BYTES);
 	problem = SpecialNights_CheckOxideModel(model, fileData, (u32)ptrMapOffset);
 	if (problem != NULL)
 	{
