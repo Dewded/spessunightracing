@@ -316,6 +316,21 @@ void CAM_ClearScreen(struct GameTracker *gGT)
 			s32 x = pb->rect.x;
 			s32 y = pb->rect.y;
 			s32 h = pb->rect.h;
+#if defined(CTR_NATIVE)
+			// Widescreen viewports start left of and run past the 512-wide PS1 page.
+			// These FILLs write VRAM directly, so keep them on the page (a negative X
+			// would also sign-extend into the packed Y half). The renderer extends
+			// fills that touch the page edges across the widescreen frame.
+			if (x < 0)
+			{
+				w += x;
+				x = 0;
+			}
+			if (x + w > SCREEN_WIDTH)
+			{
+				w = SCREEN_WIDTH - x;
+			}
+#endif
 
 			// Camera pitch moves the split around the midpoint at 0x800.
 			s32 pitchShift = ((s32)pb->rot.x - 0x800) >> 3;
