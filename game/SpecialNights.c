@@ -73,4 +73,66 @@ void SpecialNights_DrawEngineClass(s32 playerIndex, s32 characterID, s32 posX, s
 	DecalFont_DrawLine(s_specialNightsEngineLabels[engine], (s16)posX, (s16)posY, (s16)fontType, (JUSTIFY_CENTER | (isDefault ? ORANGE : WHITE)));
 }
 
+// NOTE: Nitros Oxide shares the Fake Crash slot on character select (the PS1
+// select-grid tables are fixed at 15 icons). L2/R2 toggles the slot per player;
+// the race loads character 15, and the menu folds it back into the slot.
+global_variable b32 s_specialNightsOxide[SPECIAL_NIGHTS_PLAYER_COUNT];
+
+void SpecialNights_ToggleOxide(s32 playerIndex, s32 hoveredCharacterID, u32 buttonTaps)
+{
+	if ((playerIndex < 0) || (playerIndex >= SPECIAL_NIGHTS_PLAYER_COUNT) || (hoveredCharacterID != FAKE_CRASH) ||
+	    ((buttonTaps & (BTN_L2 | BTN_R2)) == 0))
+	{
+		return;
+	}
+
+	s_specialNightsOxide[playerIndex] = !s_specialNightsOxide[playerIndex];
+	OtherFX_Play(0, 1);
+}
+
+s32 SpecialNights_DisplayCharacterID(s32 playerIndex, s32 characterID)
+{
+	if ((playerIndex >= 0) && (playerIndex < SPECIAL_NIGHTS_PLAYER_COUNT) && (characterID == FAKE_CRASH) && s_specialNightsOxide[playerIndex])
+	{
+		return NITROS_OXIDE;
+	}
+
+	return characterID;
+}
+
+void SpecialNights_DrawOxideHint(s32 characterID, s32 posX, s32 posY)
+{
+	if (characterID == FAKE_CRASH)
+	{
+		DecalFont_DrawLine("L2/R2 OXIDE", (s16)posX, (s16)posY, FONT_SMALL, (JUSTIFY_CENTER | WHITE));
+	}
+}
+
+// Race load: players holding the Oxide toggle on the Fake Crash slot race as Oxide.
+void SpecialNights_ApplyRaceCharacters(s16 levelID)
+{
+	if (levelID >= GEM_STONE_VALLEY)
+	{
+		return;
+	}
+
+	for (s32 playerIndex = 0; playerIndex < GAME_TRACKER->numPlyrNextGame && playerIndex < SPECIAL_NIGHTS_PLAYER_COUNT; playerIndex++)
+	{
+		GAME_CHARACTER_IDS[playerIndex] = (s16)SpecialNights_DisplayCharacterID(playerIndex, GAME_CHARACTER_IDS[playerIndex]);
+	}
+}
+
+// Character select: Oxide has no grid icon, so fold him back into the Fake Crash slot.
+void SpecialNights_FoldMenuCharacters(void)
+{
+	for (s32 playerIndex = 0; playerIndex < SPECIAL_NIGHTS_PLAYER_COUNT; playerIndex++)
+	{
+		if (GAME_CHARACTER_IDS[playerIndex] == NITROS_OXIDE)
+		{
+			GAME_CHARACTER_IDS[playerIndex] = FAKE_CRASH;
+			s_specialNightsOxide[playerIndex] = true;
+		}
+	}
+}
+
 #endif

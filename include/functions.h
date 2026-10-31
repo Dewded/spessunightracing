@@ -454,6 +454,11 @@ void MainRaceTrack_RequestLoad(s16 levelID);
 void SpecialNights_CycleEngineClass(s32 playerIndex, u32 buttonTaps);
 s32 SpecialNights_DriverEngineClass(s32 driverID);
 void SpecialNights_DrawEngineClass(s32 playerIndex, s32 characterID, s32 posX, s32 posY, s32 fontType);
+void SpecialNights_ToggleOxide(s32 playerIndex, s32 hoveredCharacterID, u32 buttonTaps);
+s32 SpecialNights_DisplayCharacterID(s32 playerIndex, s32 characterID);
+void SpecialNights_DrawOxideHint(s32 characterID, s32 posX, s32 posY);
+void SpecialNights_ApplyRaceCharacters(s16 levelID);
+void SpecialNights_FoldMenuCharacters(void);
 #endif
 #if defined(CTR_NATIVE)
 s16 MainRaceTrack_QuickStartBootLevel(struct GameTracker *gt, s16 levelID);

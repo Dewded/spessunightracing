@@ -187,6 +187,8 @@ picture at the left and right edges, while the HUD, menus and videos keep their 
 - **Engine class picker:** on character select, press **L1/R1** before confirming to choose a stat class for your kart:
   the character's own (orange), or BALANCED, ACCEL, SPEED or TURN (white). Human players' karts use the chosen class's
   stats and engine sound; AI racers keep their character's class. The choice is kept between races.
+- **Nitros Oxide is playable:** highlight Fake Crash and press **L2/R2** to switch that slot to Oxide (the window shows
+  his name; the menu preview still shows Fake Crash's kart). Quick test: `--track "Crash Cove" --character oxide`.
 
 ## Debug Quick Start
 

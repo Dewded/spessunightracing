@@ -854,6 +854,9 @@ void MM_Characters_MenuProc(struct RectMenu *unused)
 
 	(void)unused;
 
+#if defined(CTR_NATIVE)
+	SpecialNights_FoldMenuCharacters();
+#endif
 
 	for (playerIndex = 0; playerIndex < MM_CHARACTER_SELECT_MAX_PLAYERS; playerIndex++)
 	{
@@ -1021,6 +1024,7 @@ dontDrawSelectCharacter:
 		if ((MM_CHARACTER_SELECT_MENU_STATE == IN_MENU) && ((((int)(s16)MM_CHARACTER_SELECT_FLAGS >> playerIndex) & 1U) == 0))
 		{
 			SpecialNights_CycleEngineClass(playerIndex, MM_GAME_BUTTON_TAPS[playerIndex]);
+			SpecialNights_ToggleOxide(playerIndex, preInputCharacterMeta->characterID, MM_GAME_BUTTON_TAPS[playerIndex]);
 		}
 #endif
 
@@ -1491,7 +1495,13 @@ outerPlayerLoopComplete:
 
 				localizedStrings = GAME_LANGUAGE_STRINGS;
 				transitionWordOffset = menuPlayerIndex * (sizeof(*driverWindowTransition) / sizeof(s16));
+#if defined(CTR_NATIVE)
+				characterNameOffset =
+				    GAME_CHARACTER_METADATA[SpecialNights_DisplayCharacterID(menuPlayerIndex, preInputCharacterMeta->characterID)].name_LNG_long *
+				    sizeof(*localizedStrings);
+#else
 				characterNameOffset = GAME_CHARACTER_METADATA[preInputCharacterMeta->characterID].name_LNG_long * sizeof(*localizedStrings);
+#endif
 				characterNameSlot = (char **)(characterNameOffset + (u32)localizedStrings);
 				transitionBase = MM_CHARACTER_SELECT_TRANSITION_META;
 				characterSelectWindowWidth = MM_CHARACTER_SELECT_WINDOW_WIDTH;
@@ -1524,7 +1534,9 @@ outerPlayerLoopComplete:
 				DecalFont_DrawLine(*characterNameSlot, namePosX, namePosY, fontType, (JUSTIFY_CENTER | ORANGE));
 #if defined(CTR_NATIVE)
 				// Engine class inside the top edge of the driver window, clear of the name and icons.
-				SpecialNights_DrawEngineClass(menuPlayerIndex, preInputCharacterMeta->characterID, namePosX, nameBaseY + 4, FONT_SMALL);
+				SpecialNights_DrawEngineClass(menuPlayerIndex, SpecialNights_DisplayCharacterID(menuPlayerIndex, preInputCharacterMeta->characterID),
+				                              namePosX, nameBaseY + 4, FONT_SMALL);
+				SpecialNights_DrawOxideHint(preInputCharacterMeta->characterID, namePosX, nameBaseY + 14);
 #endif
 			}
 

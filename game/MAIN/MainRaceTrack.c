@@ -80,6 +80,7 @@ void MainRaceTrack_RequestLoad(s16 levelID)
 
 #if defined(CTR_NATIVE)
 	levelID = MainRaceTrack_ApplyQuickStart(gt, levelID);
+	SpecialNights_ApplyRaceCharacters(levelID);
 #endif
 
 	// Turn off HUD
