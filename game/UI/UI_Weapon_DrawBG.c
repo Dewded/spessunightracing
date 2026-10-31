@@ -8,6 +8,14 @@ void UI_Weapon_DrawBG(s16 posX, s16 posY, s16 scale, struct Driver *d)
 	s32 firstPosX;
 
 	position.x = posX;
+#if defined(CTR_NATIVE)
+	// Widescreen: the shine draws in HUD (4:3) coordinates into the player's 3D
+	// view, whose origin moved left when its screen-edge side was widened.
+	if (GAME_TRACKER->pushBuffer[d->driverID].rect.x < 0)
+	{
+		position.x -= GAME_TRACKER->pushBuffer[d->driverID].rect.x;
+	}
+#endif
 	position.y = posY;
 
 	if (d->BattleHUD.juicedUpCooldown != 0)
