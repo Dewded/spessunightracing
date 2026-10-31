@@ -77,53 +77,84 @@ void SpecialNights_DrawEngineClass(s32 playerIndex, s32 characterID, s32 posX, s
 	DecalFont_DrawLine(s_specialNightsEngineLabels[engine], (s16)posX, (s16)posY, (s16)fontType, (JUSTIFY_CENTER | (isDefault ? ORANGE : WHITE)));
 }
 
-// NOTE: Nitros Oxide shares the Fake Crash slot on character select (the PS1
-// select-grid tables are fixed at 15 icons). L2/R2 toggles the slot per player;
-// the race loads character 15, and the menu folds it back into the slot.
-global_variable b32 s_specialNightsOxide[SPECIAL_NIGHTS_PLAYER_COUNT];
+// NOTE: Nitros Oxide gets a 16th character select icon. The retail layout
+// tables hold 15 icons, so each layout is copied into a 16-entry native table
+// with Oxide added to the row Fake Crash sits in (re-spaced so the row stays
+// centred) and the neighbouring navigation links pointed at him.
+#define SPECIAL_NIGHTS_SELECT_LAYOUT_COUNT 6
+#define SPECIAL_NIGHTS_SELECT_OXIDE_ICON   15
 
-void SpecialNights_ToggleOxide(s32 playerIndex, s32 hoveredCharacterID, u32 buttonTaps)
+global_variable struct CharacterSelectMeta s_specialNightsSelectMeta[SPECIAL_NIGHTS_SELECT_LAYOUT_COUNT][SPECIAL_NIGHTS_SELECT_ICON_COUNT];
+
+internal void SpecialNights_SetSelectIcon(struct CharacterSelectMeta *meta, s32 icon, s16 posX, s16 posY, u8 up, u8 down, u8 left, u8 right)
 {
-	if ((playerIndex < 0) || (playerIndex >= SPECIAL_NIGHTS_PLAYER_COUNT) || (hoveredCharacterID != FAKE_CRASH) ||
-	    ((buttonTaps & (BTN_L2 | BTN_R2)) == 0))
-	{
-		return;
-	}
-
-	s_specialNightsOxide[playerIndex] = !s_specialNightsOxide[playerIndex];
-	OtherFX_Play(0, 1);
+	meta[icon].posX = posX;
+	meta[icon].posY = posY;
+	meta[icon].nextIconByDirection[0] = up;
+	meta[icon].nextIconByDirection[1] = down;
+	meta[icon].nextIconByDirection[2] = left;
+	meta[icon].nextIconByDirection[3] = right;
 }
 
-s32 SpecialNights_DisplayCharacterID(s32 playerIndex, s32 characterID)
+struct CharacterSelectMeta *SpecialNights_CharacterSelectMeta(s32 layoutIndex, const struct CharacterSelectMeta *retail)
 {
-	if ((playerIndex >= 0) && (playerIndex < SPECIAL_NIGHTS_PLAYER_COUNT) && (characterID == FAKE_CRASH) && s_specialNightsOxide[playerIndex])
+	struct CharacterSelectMeta *meta;
+	s16 rowY;
+
+	if ((layoutIndex < 0) || (layoutIndex >= SPECIAL_NIGHTS_SELECT_LAYOUT_COUNT))
 	{
-		return NITROS_OXIDE;
+		layoutIndex = 0;
 	}
 
-	return characterID;
+	meta = s_specialNightsSelectMeta[layoutIndex];
+	memcpy(meta, retail, SPECIAL_NIGHTS_SELECT_OXIDE_ICON * sizeof(*meta));
+	meta[SPECIAL_NIGHTS_SELECT_OXIDE_ICON].characterID = NITROS_OXIDE;
+	meta[SPECIAL_NIGHTS_SELECT_OXIDE_ICON].unlockFlags = MM_CHARACTER_UNLOCK_ALWAYS;
+
+	switch (layoutIndex)
+	{
+	case 2:
+		// 3P: Komodo Joe, Penta, Fake Crash, Oxide across the top, one per column.
+		rowY = meta[12].posY;
+		SpecialNights_SetSelectIcon(meta, 12, 0x20, rowY, 12, 0, 12, 13);
+		SpecialNights_SetSelectIcon(meta, 13, 0x60, rowY, 13, 1, 12, 14);
+		SpecialNights_SetSelectIcon(meta, 14, 0xA0, rowY, 14, 2, 13, 15);
+		SpecialNights_SetSelectIcon(meta, 15, 0xE0, rowY, 15, 3, 14, 15);
+		meta[3].nextIconByDirection[0] = 15; // Coco up
+		break;
+
+	case 3:
+		// 4P: N. Tropy, Fake Crash, Oxide centred along the bottom.
+		rowY = meta[9].posY;
+		SpecialNights_SetSelectIcon(meta, 8, 0xA0, rowY, 5, 8, 8, 9);
+		SpecialNights_SetSelectIcon(meta, 9, 0xE0, rowY, 6, 9, 8, 15);
+		SpecialNights_SetSelectIcon(meta, 15, 0x120, rowY, 7, 15, 9, 15);
+		meta[7].nextIconByDirection[1] = 15; // Pura down
+		break;
+
+	default:
+		// 1P/2P: Komodo Joe, Penta, Fake Crash, Oxide under the middle four columns.
+		rowY = meta[14].posY;
+		SpecialNights_SetSelectIcon(meta, 12, 0x80, rowY, 4, 12, 12, 13);
+		SpecialNights_SetSelectIcon(meta, 13, 0xC0, rowY, 5, 13, 12, 14);
+		SpecialNights_SetSelectIcon(meta, 14, 0x100, rowY, 6, 14, 13, 15);
+		SpecialNights_SetSelectIcon(meta, 15, 0x140, rowY, 7, 15, 14, 15);
+		meta[7].nextIconByDirection[1] = 15; // Pura down
+		break;
+	}
+
+	return meta;
 }
 
-void SpecialNights_DrawOxideHint(s32 characterID, s32 posX, s32 posY)
+// Icon slide-in reuses a neighbour's transition: entry 15 is the title's.
+s32 SpecialNights_IconTransitionIndex(s32 layoutIndex, s32 iconIndex)
 {
-	if (characterID == FAKE_CRASH)
+	if (iconIndex != SPECIAL_NIGHTS_SELECT_OXIDE_ICON)
 	{
-		DecalFont_DrawLine("L2/R2 OXIDE", (s16)posX, (s16)posY, FONT_SMALL, (JUSTIFY_CENTER | WHITE));
-	}
-}
-
-// Race load: players holding the Oxide toggle on the Fake Crash slot race as Oxide.
-void SpecialNights_ApplyRaceCharacters(s16 levelID)
-{
-	if (levelID >= GEM_STONE_VALLEY)
-	{
-		return;
+		return iconIndex;
 	}
 
-	for (s32 playerIndex = 0; playerIndex < GAME_TRACKER->numPlyrNextGame && playerIndex < SPECIAL_NIGHTS_PLAYER_COUNT; playerIndex++)
-	{
-		GAME_CHARACTER_IDS[playerIndex] = (s16)SpecialNights_DisplayCharacterID(playerIndex, GAME_CHARACTER_IDS[playerIndex]);
-	}
+	return (layoutIndex == 3) ? 9 : 14;
 }
 
 // NOTE: The main menu LEV has no Oxide model, so character select loads his HI
@@ -202,7 +233,8 @@ internal const char *SpecialNights_CheckOxideModel(const struct Model *model, co
 	return NULL;
 }
 
-struct Model *SpecialNights_GetOxidePreviewModel(void)
+// Synchronous read + checked relocation of a racer model file into host memory.
+internal struct Model *SpecialNights_LoadRacerModel(s32 subfileIndex, u8 **bufferOut)
 {
 	struct BigHeader *bigfile = sdata->ptrBigfile1;
 	struct BigEntry *entry;
@@ -218,24 +250,13 @@ struct Model *SpecialNights_GetOxidePreviewModel(void)
 	u8 *fileData;
 	int *offsets;
 
-	if (s_specialNightsOxideModelTried)
-	{
-		return s_specialNightsOxideModel;
-	}
+	*bufferOut = NULL;
 
-	// Only read while the load queue is idle; the read reuses its slot state.
-	if ((bigfile == NULL) || (sdata->queueLength != 0) || (sdata->load_inProgress != 0) || (sdata->Loading.stage != LOAD_IDLE))
-	{
-		return NULL;
-	}
-
-	s_specialNightsOxideModelTried = true;
-
-	entry = BIG_GETENTRY((struct BigHeader *)((char *)bigfile + (BI_RACERMODELHI + NITROS_OXIDE) * sizeof(struct BigEntry)));
+	entry = BIG_GETENTRY((struct BigHeader *)((char *)bigfile + subfileIndex * sizeof(struct BigEntry)));
 	fileSize = (u32)entry->size;
 	if ((fileSize < (2 * sizeof(s32) + sizeof(struct Model))) || (fileSize > SPECIAL_NIGHTS_OXIDE_FILE_MAX_BYTES))
 	{
-		Platform_LogWarn("[Special Nights] Oxide preview: unexpected file size %u\n", fileSize);
+		Platform_LogWarn("[Special Nights] racer model %d: unexpected file size %u\n", subfileIndex, fileSize);
 		return NULL;
 	}
 
@@ -246,13 +267,13 @@ struct Model *SpecialNights_GetOxidePreviewModel(void)
 		return NULL;
 	}
 
-	// Synchronous raw read; the slot the reader scribbles on is restored after.
+	// The slot the reader scribbles on is restored after.
 	savedSlot = data.currSlot;
-	fileData = (u8 *)LOAD_ReadFile_ex(bigfile, LT_GETADDR, BI_RACERMODELHI + NITROS_OXIDE, buffer, &fileSize, NULL);
+	fileData = (u8 *)LOAD_ReadFile_ex(bigfile, LT_GETADDR, subfileIndex, buffer, &fileSize, NULL);
 	data.currSlot = savedSlot;
 	if (fileData != buffer)
 	{
-		Platform_LogWarn("[Special Nights] Oxide preview: disc read failed\n");
+		Platform_LogWarn("[Special Nights] racer model %d: disc read failed\n", subfileIndex);
 		free(buffer);
 		return NULL;
 	}
@@ -263,7 +284,7 @@ struct Model *SpecialNights_GetOxidePreviewModel(void)
 	dataSize = fileSize - sizeof(s32);
 	if ((ptrMapOffset < (s32)sizeof(struct Model)) || ((u32)ptrMapOffset > dataSize - sizeof(struct DramPointerMap)))
 	{
-		Platform_LogWarn("[Special Nights] Oxide preview: bad pointer map offset %d (size %u)\n", ptrMapOffset, fileSize);
+		Platform_LogWarn("[Special Nights] racer model %d: bad pointer map offset %d (size %u)\n", subfileIndex, ptrMapOffset, fileSize);
 		free(buffer);
 		return NULL;
 	}
@@ -272,7 +293,7 @@ struct Model *SpecialNights_GetOxidePreviewModel(void)
 	offsets = DRAM_GETOFFSETS(dpm);
 	if ((dpm->numBytes < 0) || ((u32)dpm->numBytes > dataSize - (u32)ptrMapOffset - sizeof(struct DramPointerMap)))
 	{
-		Platform_LogWarn("[Special Nights] Oxide preview: bad pointer map size %d\n", dpm->numBytes);
+		Platform_LogWarn("[Special Nights] racer model %d: bad pointer map size %d\n", subfileIndex, dpm->numBytes);
 		free(buffer);
 		return NULL;
 	}
@@ -282,7 +303,7 @@ struct Model *SpecialNights_GetOxidePreviewModel(void)
 
 		if (slotOffset > (u32)ptrMapOffset - sizeof(u32))
 		{
-			Platform_LogWarn("[Special Nights] Oxide preview: pointer slot %u outside data\n", slotOffset);
+			Platform_LogWarn("[Special Nights] racer model %d: pointer slot %u outside data\n", subfileIndex, slotOffset);
 			free(buffer);
 			return NULL;
 		}
@@ -295,28 +316,78 @@ struct Model *SpecialNights_GetOxidePreviewModel(void)
 	problem = SpecialNights_CheckOxideModel(model, fileData, (u32)ptrMapOffset);
 	if (problem != NULL)
 	{
-		Platform_LogWarn("[Special Nights] Oxide preview: %s\n", problem);
+		Platform_LogWarn("[Special Nights] racer model %d: %s\n", subfileIndex, problem);
 		free(buffer);
 		return NULL;
 	}
 
-	Platform_Log("[Special Nights] Oxide preview: loaded '%.16s' (%d LOD, %u anims, %u bytes)\n", model->name, model->numHeaders,
-	             model->headers[0].numAnimations, fileSize);
-	s_specialNightsOxideModel = model;
-	return s_specialNightsOxideModel;
+	*bufferOut = buffer;
+	return model;
 }
 
-// Character select: Oxide has no grid icon, so fold him back into the Fake Crash slot.
-void SpecialNights_FoldMenuCharacters(void)
+internal s16 SpecialNights_ScaleAxis(s32 value, s32 menuReference, s32 raceReference)
 {
-	for (s32 playerIndex = 0; playerIndex < SPECIAL_NIGHTS_PLAYER_COUNT; playerIndex++)
+	if (raceReference == 0)
 	{
-		if (GAME_CHARACTER_IDS[playerIndex] == NITROS_OXIDE)
-		{
-			GAME_CHARACTER_IDS[playerIndex] = FAKE_CRASH;
-			s_specialNightsOxide[playerIndex] = true;
-		}
+		return (s16)value;
 	}
+
+	return (s16)((value * menuReference) / raceReference);
+}
+
+struct Model *SpecialNights_GetOxidePreviewModel(void)
+{
+	struct Model *model;
+	struct Model *menuFake;
+	struct Model *raceFake;
+	u8 *buffer;
+	u8 *raceFakeBuffer;
+
+	if (s_specialNightsOxideModelTried)
+	{
+		return s_specialNightsOxideModel;
+	}
+
+	// Only read while the load queue is idle; the read reuses its slot state.
+	if ((sdata->ptrBigfile1 == NULL) || (sdata->queueLength != 0) || (sdata->load_inProgress != 0) || (sdata->Loading.stage != LOAD_IDLE))
+	{
+		return NULL;
+	}
+
+	s_specialNightsOxideModelTried = true;
+
+	model = SpecialNights_LoadRacerModel(BI_RACERMODELHI + NITROS_OXIDE, &buffer);
+	if (model == NULL)
+	{
+		return NULL;
+	}
+
+	// Menu karts are authored at a different header scale than race models.
+	// Scale Oxide by how Fake Crash's menu kart compares to his race model.
+	menuFake = MM_Characters_GetModelByName(GAME_CHARACTER_METADATA[FAKE_CRASH].name_Debug);
+	raceFake = SpecialNights_LoadRacerModel(BI_RACERMODELHI + FAKE_CRASH, &raceFakeBuffer);
+	if ((menuFake != NULL) && (raceFake != NULL))
+	{
+		const SVec3 *menuScale = &menuFake->headers[0].scale;
+		const SVec3 *raceScale = &raceFake->headers[0].scale;
+
+		for (s32 i = 0; i < model->numHeaders; i++)
+		{
+			SVec3 *scale = &model->headers[i].scale;
+
+			scale->x = SpecialNights_ScaleAxis(scale->x, menuScale->x, raceScale->x);
+			scale->y = SpecialNights_ScaleAxis(scale->y, menuScale->y, raceScale->y);
+			scale->z = SpecialNights_ScaleAxis(scale->z, menuScale->z, raceScale->z);
+		}
+		Platform_Log("[Special Nights] Oxide preview scale: menu fake %d,%d,%d race fake %d,%d,%d -> oxide %d,%d,%d\n", menuScale->x, menuScale->y,
+		             menuScale->z, raceScale->x, raceScale->y, raceScale->z, model->headers[0].scale.x, model->headers[0].scale.y,
+		             model->headers[0].scale.z);
+	}
+	free(raceFakeBuffer);
+
+	Platform_Log("[Special Nights] Oxide preview: loaded '%.16s' (%d LOD, %u anims)\n", model->name, model->numHeaders, model->headers[0].numAnimations);
+	s_specialNightsOxideModel = model;
+	return s_specialNightsOxideModel;
 }
 
 #endif

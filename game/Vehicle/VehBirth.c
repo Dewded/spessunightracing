@@ -650,6 +650,11 @@ void VehBirth_SetConsts(struct Driver *driver)
 	i = 0;
 	characterMetadata = GAME_CHARACTER_METADATA;
 	characterIDs = GAME_CHARACTER_IDS;
+#if defined(CTR_NATIVE)
+	// Engine class comes from SpecialNights_DriverEngineClass below.
+	(void)characterMetadata;
+	(void)characterIDs;
+#endif
 	VEH_LOAD_META_PHYS_BASE(metaPhysBase, metaPhysPage);
 	metaPhys = metaPhysBase;
 	metaPhysByteOffset = i;

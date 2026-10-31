@@ -454,11 +454,11 @@ void MainRaceTrack_RequestLoad(s16 levelID);
 void SpecialNights_CycleEngineClass(s32 playerIndex, u32 buttonTaps);
 s32 SpecialNights_DriverEngineClass(s32 driverID);
 void SpecialNights_DrawEngineClass(s32 playerIndex, s32 characterID, s32 posX, s32 posY, s32 fontType);
-void SpecialNights_ToggleOxide(s32 playerIndex, s32 hoveredCharacterID, u32 buttonTaps);
-s32 SpecialNights_DisplayCharacterID(s32 playerIndex, s32 characterID);
-void SpecialNights_DrawOxideHint(s32 characterID, s32 posX, s32 posY);
-void SpecialNights_ApplyRaceCharacters(s16 levelID);
-void SpecialNights_FoldMenuCharacters(void);
+// Character select icons: the retail 15 plus Nitros Oxide.
+#define SPECIAL_NIGHTS_SELECT_ICON_COUNT 16
+struct CharacterSelectMeta;
+struct CharacterSelectMeta *SpecialNights_CharacterSelectMeta(s32 layoutIndex, const struct CharacterSelectMeta *retail);
+s32 SpecialNights_IconTransitionIndex(s32 layoutIndex, s32 iconIndex);
 struct Model *SpecialNights_GetOxidePreviewModel(void);
 #endif
 #if defined(CTR_NATIVE)

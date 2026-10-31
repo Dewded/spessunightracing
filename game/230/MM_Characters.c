@@ -9,7 +9,11 @@ enum
 	MM_CHARACTER_SELECT_MODEL_MOVE_FP_SHIFT = 0xc,
 	MM_CHARACTER_SELECT_MODEL_MOVE_NEXT = 1,
 	MM_CHARACTER_SELECT_MODEL_MOVE_PREV = -1,
+#if defined(CTR_NATIVE)
+	MM_CHARACTER_SELECT_ICON_COUNT = SPECIAL_NIGHTS_SELECT_ICON_COUNT,
+#else
 	MM_CHARACTER_SELECT_ICON_COUNT = 0xf,
+#endif
 	MM_CHARACTER_SELECT_EXPANSION_ICON_FIRST = 0xc,
 	MM_CHARACTER_SELECT_DEFAULT_DRIVER_COUNT = 8,
 	MM_CHARACTER_SELECT_MAX_PLAYERS = 4,
@@ -454,7 +458,7 @@ LAB_Characters_DrawWindows_Loop:
 	model = MM_Characters_GetModelByName(characterMetadata[(int)*currCharacterID].name_Debug);
 #if defined(CTR_NATIVE)
 	// Special Nights: Oxide's preview kart is loaded on demand (not in the menu LEV).
-	if (SpecialNights_DisplayCharacterID(indexOrSlideFactor, *currCharacterID) == NITROS_OXIDE)
+	if (*currCharacterID == NITROS_OXIDE)
 	{
 		struct Model *oxideModel = SpecialNights_GetOxidePreviewModel();
 		if (oxideModel != NULL)
@@ -603,6 +607,9 @@ void MM_Characters_SetMenuLayout(void)
 	iconIndex = MM_CHARACTER_SELECT_EXPANSION_ICON_FIRST;
 	progress = &GAME_PROGRESS;
 	meta1P2P = MM_CHARACTER_SELECT_META_1P2P;
+#if defined(CTR_NATIVE)
+	meta1P2P = SpecialNights_CharacterSelectMeta(MM_CHARACTER_SELECT_LAYOUT_1P, meta1P2P);
+#endif
 
 	layoutIndex = GAME_TRACKER->numPlyrNextGame - 1;
 
@@ -638,6 +645,9 @@ void MM_Characters_SetMenuLayout(void)
 
 	MM_ACTIVE_CHARACTER_SELECT_WINDOW_POS = MM_CHARACTER_SELECT_WINDOW_POS_BY_LAYOUT[layoutIndex];
 	MM_ACTIVE_CHARACTER_SELECT_META = MM_CHARACTER_SELECT_META_BY_LAYOUT[layoutIndex];
+#if defined(CTR_NATIVE)
+	MM_ACTIVE_CHARACTER_SELECT_META = SpecialNights_CharacterSelectMeta(layoutIndex, MM_ACTIVE_CHARACTER_SELECT_META);
+#endif
 
 	MM_CHARACTER_SELECT_WINDOW_WIDTH = MM_CHARACTER_SELECT_LAYOUT_WINDOW_W[layoutIndex];
 	MM_CHARACTER_SELECT_WINDOW_HEIGHT = MM_CHARACTER_SELECT_LAYOUT_WINDOW_H[layoutIndex];
@@ -865,9 +875,6 @@ void MM_Characters_MenuProc(struct RectMenu *unused)
 
 	(void)unused;
 
-#if defined(CTR_NATIVE)
-	SpecialNights_FoldMenuCharacters();
-#endif
 
 	for (playerIndex = 0; playerIndex < MM_CHARACTER_SELECT_MAX_PLAYERS; playerIndex++)
 	{
@@ -1035,7 +1042,6 @@ dontDrawSelectCharacter:
 		if ((MM_CHARACTER_SELECT_MENU_STATE == IN_MENU) && ((((int)(s16)MM_CHARACTER_SELECT_FLAGS >> playerIndex) & 1U) == 0))
 		{
 			SpecialNights_CycleEngineClass(playerIndex, MM_GAME_BUTTON_TAPS[playerIndex]);
-			SpecialNights_ToggleOxide(playerIndex, preInputCharacterMeta->characterID, MM_GAME_BUTTON_TAPS[playerIndex]);
 		}
 #endif
 
@@ -1283,7 +1289,11 @@ dontDrawSelectCharacter:
 
 		// transition of each icon
 		currentIconTransitionBase = MM_CHARACTER_SELECT_TRANSITION_META;
+#if defined(CTR_NATIVE)
+		currentIconTransitionOffset = SpecialNights_IconTransitionIndex(MM_CHARACTER_SELECT_LAYOUT_INDEX, candidateIconIndex) * sizeof(*currentIconTransition);
+#else
 		currentIconTransitionOffset = candidateIconIndex * sizeof(*currentIconTransition);
+#endif
 		currentIconTransition = (struct TransitionMeta *)(currentIconTransitionOffset + (u32)currentIconTransitionBase);
 
 		// NOTE(aalhendi): Three observations retain GCC 2.8.1's retail pre-draw schedule.
@@ -1363,6 +1373,9 @@ outerPlayerLoopComplete:
 				}
 
 				iconTransitionIndex = playerIndex;
+#if defined(CTR_NATIVE)
+				iconTransitionIndex = SpecialNights_IconTransitionIndex(MM_CHARACTER_SELECT_LAYOUT_INDEX, iconTransitionIndex);
+#endif
 				iconWork = (s16)iconTransitionIndex;
 				iconCharacterMetadata = (struct MetaDataCHAR *)MM_CHARACTER_SELECT_TRANSITION_POINTER_PAGE_VALUE;
 				CTR_PSX_FORGET_VALUE(iconCharacterMetadata);
@@ -1382,6 +1395,10 @@ outerPlayerLoopComplete:
 				iconTransition = (struct TransitionMeta *)iconTransitionByteOffset;
 				iconPosX = iconTransition->currX + preInputCharacterMeta->posX + MM_CHARACTER_SELECT_ICON_DECAL_OFFSET_X;
 
+#if defined(CTR_NATIVE)
+				// Oxide's portrait may be missing from the menu icon set; keep the empty frame then.
+				if (GAME_TRACKER->ptrIcons[iconCharacterMetadata[iconMetaTail[3]].iconID] != NULL)
+#endif
 				MM_RECTMENU_DRAW_POLY_GT4(
 				    CTR_PSX_PAGE_LVALUE(struct GameTracker *, iconGameTrackerPage, MM_GAME_TRACKER_PAGE_OFFSET, GAME_TRACKER)
 				        ->ptrIcons[iconCharacterMetadata[iconMetaTail[3]].iconID],
@@ -1506,13 +1523,7 @@ outerPlayerLoopComplete:
 
 				localizedStrings = GAME_LANGUAGE_STRINGS;
 				transitionWordOffset = menuPlayerIndex * (sizeof(*driverWindowTransition) / sizeof(s16));
-#if defined(CTR_NATIVE)
-				characterNameOffset =
-				    GAME_CHARACTER_METADATA[SpecialNights_DisplayCharacterID(menuPlayerIndex, preInputCharacterMeta->characterID)].name_LNG_long *
-				    sizeof(*localizedStrings);
-#else
 				characterNameOffset = GAME_CHARACTER_METADATA[preInputCharacterMeta->characterID].name_LNG_long * sizeof(*localizedStrings);
-#endif
 				characterNameSlot = (char **)(characterNameOffset + (u32)localizedStrings);
 				transitionBase = MM_CHARACTER_SELECT_TRANSITION_META;
 				characterSelectWindowWidth = MM_CHARACTER_SELECT_WINDOW_WIDTH;
@@ -1545,9 +1556,7 @@ outerPlayerLoopComplete:
 				DecalFont_DrawLine(*characterNameSlot, namePosX, namePosY, fontType, (JUSTIFY_CENTER | ORANGE));
 #if defined(CTR_NATIVE)
 				// Engine class inside the top edge of the driver window, clear of the name and icons.
-				SpecialNights_DrawEngineClass(menuPlayerIndex, SpecialNights_DisplayCharacterID(menuPlayerIndex, preInputCharacterMeta->characterID),
-				                              namePosX, nameBaseY + 4, FONT_SMALL);
-				SpecialNights_DrawOxideHint(preInputCharacterMeta->characterID, namePosX, nameBaseY + 14);
+				SpecialNights_DrawEngineClass(menuPlayerIndex, preInputCharacterMeta->characterID, namePosX, nameBaseY + 4, FONT_SMALL);
 #endif
 			}
 
@@ -1579,8 +1588,15 @@ outerPlayerLoopComplete:
 		    // also the variable written by cheats
 		    CHECK_ADV_BIT(GAME_PROGRESS.unlocks, unlockRequirement))
 		{
+#if defined(CTR_NATIVE)
+			iconRect.x = MM_CHARACTER_SELECT_TRANSITION_META[SpecialNights_IconTransitionIndex(MM_CHARACTER_SELECT_LAYOUT_INDEX, playerIndex)].currX +
+			             preInputCharacterMeta->posX;
+			iconRect.y = MM_CHARACTER_SELECT_TRANSITION_META[SpecialNights_IconTransitionIndex(MM_CHARACTER_SELECT_LAYOUT_INDEX, playerIndex)].currY +
+			             (s16)iconMetaTail[0];
+#else
 			iconRect.x = MM_CHARACTER_SELECT_TRANSITION_META[playerIndex].currX + preInputCharacterMeta->posX;
 			iconRect.y = MM_CHARACTER_SELECT_TRANSITION_META[playerIndex].currY + (s16)iconMetaTail[0];
+#endif
 			iconRect.w = MM_CHARACTER_SELECT_ICON_RECT_W;
 			iconRect.h = MM_CHARACTER_SELECT_ICON_RECT_H;
 
