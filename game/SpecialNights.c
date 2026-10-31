@@ -1,5 +1,9 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+#include <platform/native_log.h>
+#endif
+
 // Special Nights gameplay mods (native builds only).
 
 #if defined(CTR_NATIVE)
@@ -125,17 +129,94 @@ void SpecialNights_ApplyRaceCharacters(s16 levelID)
 // NOTE: The main menu LEV has no Oxide model, so character select loads his HI
 // racer file on demand into host memory (outside the PS1-sized mempack) and
 // keeps it for the session. Textures come from whatever the menu VRAM holds.
+// The file is checked before relocation and the model before use; anything
+// unexpected leaves the Fake Crash kart in place and logs why.
+#define SPECIAL_NIGHTS_OXIDE_FILE_MAX_BYTES 0x100000
+#define SPECIAL_NIGHTS_OXIDE_MAX_HEADERS    8
+#define SPECIAL_NIGHTS_OXIDE_MAX_ANIMS      64
+
 global_variable struct Model *s_specialNightsOxideModel;
 global_variable b32 s_specialNightsOxideModelTried;
+
+internal b32 SpecialNights_InFile(const void *ptr, const u8 *base, u32 size, u32 bytes)
+{
+	const u8 *p = (const u8 *)ptr;
+
+	return (p >= base) && (bytes <= size) && ((u32)(p - base) <= size - bytes);
+}
+
+internal b32 SpecialNights_InFileOrNull(const void *ptr, const u8 *base, u32 size, u32 bytes)
+{
+	return (ptr == NULL) || SpecialNights_InFile(ptr, base, size, bytes);
+}
+
+internal const char *SpecialNights_CheckOxideModel(const struct Model *model, const u8 *base, u32 size)
+{
+	if (!SpecialNights_InFile(model, base, size, sizeof(struct Model)))
+	{
+		return "model outside file";
+	}
+	if ((model->numHeaders <= 0) || (model->numHeaders > SPECIAL_NIGHTS_OXIDE_MAX_HEADERS))
+	{
+		return "bad header count";
+	}
+	if (!SpecialNights_InFile(model->headers, base, size, (u32)model->numHeaders * sizeof(struct ModelHeader)))
+	{
+		return "headers outside file";
+	}
+
+	for (s32 i = 0; i < model->numHeaders; i++)
+	{
+		const struct ModelHeader *mh = &model->headers[i];
+
+		if ((mh->ptrCommandList == 0) || !SpecialNights_InFile((const void *)(size_t)mh->ptrCommandList, base, size, sizeof(u32)) ||
+		    !SpecialNights_InFileOrNull(mh->ptrFrameData, base, size, 1) || !SpecialNights_InFileOrNull(mh->ptrTexLayout, base, size, sizeof(void *)) ||
+		    !SpecialNights_InFileOrNull(mh->ptrColors, base, size, sizeof(u32)) || !SpecialNights_InFileOrNull(mh->animtex, base, size, 1))
+		{
+			return "header data outside file";
+		}
+		if (mh->numAnimations > SPECIAL_NIGHTS_OXIDE_MAX_ANIMS)
+		{
+			return "bad animation count";
+		}
+		if (mh->numAnimations != 0)
+		{
+			if (!SpecialNights_InFile(mh->ptrAnimations, base, size, mh->numAnimations * sizeof(void *)))
+			{
+				return "animation table outside file";
+			}
+			for (u32 a = 0; a < mh->numAnimations; a++)
+			{
+				if (!SpecialNights_InFile(mh->ptrAnimations[a], base, size, 1))
+				{
+					return "animation outside file";
+				}
+			}
+		}
+		else if (mh->ptrFrameData == NULL)
+		{
+			return "no frame data";
+		}
+	}
+
+	return NULL;
+}
 
 struct Model *SpecialNights_GetOxidePreviewModel(void)
 {
 	struct BigHeader *bigfile = sdata->ptrBigfile1;
 	struct BigEntry *entry;
-	u32 size;
+	struct LoadQueueSlot savedSlot;
+	struct DramPointerMap *dpm;
+	struct Model *model;
+	const char *problem;
+	s32 ptrMapOffset;
+	u32 fileSize;
+	u32 dataSize;
 	u32 bufferSize;
 	u8 *buffer;
 	u8 *fileData;
+	int *offsets;
 
 	if (s_specialNightsOxideModelTried)
 	{
@@ -151,22 +232,76 @@ struct Model *SpecialNights_GetOxidePreviewModel(void)
 	s_specialNightsOxideModelTried = true;
 
 	entry = BIG_GETENTRY((struct BigHeader *)((char *)bigfile + (BI_RACERMODELHI + NITROS_OXIDE) * sizeof(struct BigEntry)));
-	bufferSize = (((u32)entry->size + LOAD_CD_DATA_SECTOR_ROUND_MASK) >> LOAD_CD_DATA_SECTOR_SHIFT) << LOAD_CD_DATA_SECTOR_SHIFT;
+	fileSize = (u32)entry->size;
+	if ((fileSize < (2 * sizeof(s32) + sizeof(struct Model))) || (fileSize > SPECIAL_NIGHTS_OXIDE_FILE_MAX_BYTES))
+	{
+		Platform_LogWarn("[Special Nights] Oxide preview: unexpected file size %u\n", fileSize);
+		return NULL;
+	}
+
+	bufferSize = ((fileSize + LOAD_CD_DATA_SECTOR_ROUND_MASK) >> LOAD_CD_DATA_SECTOR_SHIFT) << LOAD_CD_DATA_SECTOR_SHIFT;
 	buffer = (u8 *)calloc(1, bufferSize);
 	if (buffer == NULL)
 	{
 		return NULL;
 	}
 
-	// Synchronous DRAM read + pointer-map relocation; returns the data past the map header.
-	fileData = (u8 *)LOAD_DramFile(bigfile, BI_RACERMODELHI + NITROS_OXIDE, buffer, &size, -1);
-	if (fileData == NULL)
+	// Synchronous raw read; the slot the reader scribbles on is restored after.
+	savedSlot = data.currSlot;
+	fileData = (u8 *)LOAD_ReadFile_ex(bigfile, LT_GETADDR, BI_RACERMODELHI + NITROS_OXIDE, buffer, &fileSize, NULL);
+	data.currSlot = savedSlot;
+	if (fileData != buffer)
 	{
+		Platform_LogWarn("[Special Nights] Oxide preview: disc read failed\n");
 		free(buffer);
 		return NULL;
 	}
 
-	s_specialNightsOxideModel = (struct Model *)(fileData + LOAD_MODEL_FILE_HEADER_BYTES);
+	// DRAM file: [ptrMapOffset][data ...][numBytes][offsets ...]
+	memcpy(&ptrMapOffset, buffer, sizeof(ptrMapOffset));
+	fileData = buffer + sizeof(s32);
+	dataSize = fileSize - sizeof(s32);
+	if ((ptrMapOffset < (s32)sizeof(struct Model)) || ((u32)ptrMapOffset > dataSize - sizeof(struct DramPointerMap)))
+	{
+		Platform_LogWarn("[Special Nights] Oxide preview: bad pointer map offset %d (size %u)\n", ptrMapOffset, fileSize);
+		free(buffer);
+		return NULL;
+	}
+
+	dpm = (struct DramPointerMap *)(fileData + ptrMapOffset);
+	offsets = DRAM_GETOFFSETS(dpm);
+	if ((dpm->numBytes < 0) || ((u32)dpm->numBytes > dataSize - (u32)ptrMapOffset - sizeof(struct DramPointerMap)))
+	{
+		Platform_LogWarn("[Special Nights] Oxide preview: bad pointer map size %d\n", dpm->numBytes);
+		free(buffer);
+		return NULL;
+	}
+	for (s32 i = 0; i < (dpm->numBytes >> 2); i++)
+	{
+		u32 slotOffset = (u32)offsets[i] & ~3u;
+
+		if (slotOffset > (u32)ptrMapOffset - sizeof(u32))
+		{
+			Platform_LogWarn("[Special Nights] Oxide preview: pointer slot %u outside data\n", slotOffset);
+			free(buffer);
+			return NULL;
+		}
+	}
+
+	LOAD_RunPtrMap((char *)fileData, offsets, dpm->numBytes >> 2);
+
+	model = (struct Model *)(fileData + LOAD_MODEL_FILE_HEADER_BYTES);
+	problem = SpecialNights_CheckOxideModel(model, fileData, (u32)ptrMapOffset);
+	if (problem != NULL)
+	{
+		Platform_LogWarn("[Special Nights] Oxide preview: %s\n", problem);
+		free(buffer);
+		return NULL;
+	}
+
+	Platform_Log("[Special Nights] Oxide preview: loaded '%.16s' (%d LOD, %u anims, %u bytes)\n", model->name, model->numHeaders,
+	             model->headers[0].numAnimations, fileSize);
+	s_specialNightsOxideModel = model;
 	return s_specialNightsOxideModel;
 }
 
