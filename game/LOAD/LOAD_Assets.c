@@ -9,31 +9,12 @@ void LOAD_RunPtrMap(char *origin, int *patchArr, int numPtrs)
 	int *ptrCurrOffset = patchArr;
 	int *ptrEndOffset = &patchArr[numPtrs];
 
-#if defined(CTR_NATIVE)
-	// Forget pointer slots left by whatever previously occupied this memory.
-	int maxOffset = -1;
-	for (int i = 0; i < numPtrs; i++)
-	{
-		if (patchArr[i] > maxOffset)
-		{
-			maxOffset = patchArr[i];
-		}
-	}
-	if (maxOffset >= 0)
-	{
-		Platform_ClearPointerSlots(origin, (u32)maxOffset + sizeof(int));
-	}
-#endif
-
 	for (; ptrCurrOffset < ptrEndOffset; ptrCurrOffset++)
 	{
 		int offset = (*ptrCurrOffset >> 2) << 2;
 		// NOTE(aalhendi): Retail adds the aligned offset before the 32-bit base address.
 		int *location = (int *)((u32)offset + (u32)origin);
 		*location = *location + (int)origin;
-#if defined(CTR_NATIVE)
-		Platform_MarkPointerSlot(location);
-#endif
 #if defined(CTR_NATIVE) && defined(CTR_INTERNAL)
 		NativeCheckpoint_RegisterPointerSlot((char *)location);
 #endif

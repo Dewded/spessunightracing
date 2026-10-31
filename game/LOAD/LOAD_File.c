@@ -149,9 +149,6 @@ void LOAD_DramFileCallback(struct LoadQueueSlot *lqs)
 		{
 			struct DramPointerMap *dpm = (struct DramPointerMap *)&realFileBuf[ptrMapOffset];
 
-#if defined(CTR_NATIVE)
-			Platform_ClearPointerSlots(realFileBuf, (u32)ptrMapOffset);
-#endif
 			LOAD_RunPtrMap(realFileBuf, (int *)DRAM_GETOFFSETS(dpm), dpm->numBytes >> 2);
 
 #if defined(CTR_NATIVE)
