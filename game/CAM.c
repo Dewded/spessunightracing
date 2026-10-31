@@ -549,7 +549,12 @@ void CAM_StartOfRace(struct CameraDC *cDC)
 		cDC->trackPathNode = (struct CheckpointNode *)(flyInData + 0x18);
 
 		// Split-screen skips most of the fly-in.
+#if defined(CTR_NATIVE)
+		// Debug quick start skips it the same way.
+		if ((gGT->numPlyrCurrGame > 1) || NativeQuickStart_IsEnabled())
+#else
 		if (gGT->numPlyrCurrGame > 1)
+#endif
 		{
 			cDC->transitionFrame = 1;
 		}

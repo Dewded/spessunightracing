@@ -25,6 +25,7 @@ global_variable const struct NativeQuickStartName s_quickStartCharacters[] = {
     {"pinstripe", 8}, {"papu", 9}, {"roo", 10}, {"joe", 11},   {"ntropy", 12},  {"penta", 13},    {"fakecrash", 14}, {"oxide", 15},
 };
 
+global_variable b32 s_quickStartEnabled = false;
 global_variable b32 s_quickStartPending = false;
 global_variable s16 s_quickStartLevel = 0;
 global_variable s16 s_quickStartCharacter = 0;
@@ -127,9 +128,15 @@ int NativeQuickStart_ConfigureFromArgs(int argc, char **argv)
 		return 1;
 	}
 
+	s_quickStartEnabled = true;
 	s_quickStartPending = true;
 	printf("[CTR Native] Quick start: track %d, character %d\n", s_quickStartLevel, s_quickStartCharacter);
 	return 0;
+}
+
+b32 NativeQuickStart_IsEnabled(void)
+{
+	return s_quickStartEnabled;
 }
 
 b32 NativeQuickStart_TakePending(s16 *levelID, s16 *characterID)

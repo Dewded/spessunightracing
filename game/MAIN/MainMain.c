@@ -608,6 +608,10 @@ void StateZero()
 
 	gGT->levelID = NAUGHTY_DOG_CRATE;
 	memcpy(gGT->levelName, sdata->s_ndi, sizeof(sdata->s_ndi));
+#if defined(CTR_NATIVE)
+	// Debug quick start (--track) replaces the Naughty Dog crate boot level.
+	gGT->levelID = MainRaceTrack_QuickStartBootLevel(gGT, gGT->levelID);
+#endif
 	// gGT->levelID = OXIDE_TRUE_ENDING;
 
 	InitGeom();

@@ -8,5 +8,7 @@
 
 int NativeQuickStart_ConfigureFromArgs(int argc, char **argv);
 b32 NativeQuickStart_TakePending(s16 *levelID, s16 *characterID);
+// True for the whole session once --track was given; used to skip the fly-in.
+b32 NativeQuickStart_IsEnabled(void);
 
 #endif

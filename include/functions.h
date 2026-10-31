@@ -450,6 +450,9 @@ void MainInit_VRAMDisplay(void);
 
 void MainRaceTrack_StartLoad(s16 levelID);
 void MainRaceTrack_RequestLoad(s16 levelID);
+#if defined(CTR_NATIVE)
+s16 MainRaceTrack_QuickStartBootLevel(struct GameTracker *gt, s16 levelID);
+#endif
 
 int MATH_Sin(u32 angle);
 int MATH_Cos(u32 angle);

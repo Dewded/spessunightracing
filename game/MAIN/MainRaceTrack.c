@@ -20,16 +20,16 @@ void MainRaceTrack_StartLoad(s16 levelID)
 }
 
 #if defined(CTR_NATIVE)
-// NOTE: Debug quick start (--track/--character). Replaces the first intro or
-// main-menu load after boot with a 1P medium Arcade race.
+// NOTE: Debug quick start (--track/--character). Boots straight into a 1P
+// medium Arcade race instead of the Naughty Dog crate.
 #define MAIN_RACE_TRACK_QUICK_START_DIFFICULTY 0xA0
 
-static s16 MainRaceTrack_ApplyQuickStart(struct GameTracker *gt, s16 levelID)
+static s16 MainRaceTrack_TakeQuickStart(struct GameTracker *gt, s16 levelID)
 {
 	s16 quickLevel;
 	s16 character;
 
-	if ((levelID < INTRO_RACE_TODAY) || (levelID > MAIN_MENU_LEVEL) || !NativeQuickStart_TakePending(&quickLevel, &character))
+	if (!NativeQuickStart_TakePending(&quickLevel, &character))
 	{
 		return levelID;
 	}
@@ -54,6 +54,23 @@ static s16 MainRaceTrack_ApplyQuickStart(struct GameTracker *gt, s16 levelID)
 
 	gt->currLEV = quickLevel;
 	return quickLevel;
+}
+
+// Boot straight into the race instead of the Naughty Dog crate.
+s16 MainRaceTrack_QuickStartBootLevel(struct GameTracker *gt, s16 levelID)
+{
+	return MainRaceTrack_TakeQuickStart(gt, levelID);
+}
+
+// Fallback if the boot hook did not consume it: replace the first intro/menu load.
+static s16 MainRaceTrack_ApplyQuickStart(struct GameTracker *gt, s16 levelID)
+{
+	if ((levelID < INTRO_RACE_TODAY) || (levelID > MAIN_MENU_LEVEL))
+	{
+		return levelID;
+	}
+
+	return MainRaceTrack_TakeQuickStart(gt, levelID);
 }
 #endif
 
