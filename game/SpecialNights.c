@@ -122,6 +122,54 @@ void SpecialNights_ApplyRaceCharacters(s16 levelID)
 	}
 }
 
+// NOTE: The main menu LEV has no Oxide model, so character select loads his HI
+// racer file on demand into host memory (outside the PS1-sized mempack) and
+// keeps it for the session. Textures come from whatever the menu VRAM holds.
+global_variable struct Model *s_specialNightsOxideModel;
+global_variable b32 s_specialNightsOxideModelTried;
+
+struct Model *SpecialNights_GetOxidePreviewModel(void)
+{
+	struct BigHeader *bigfile = sdata->ptrBigfile1;
+	struct BigEntry *entry;
+	u32 size;
+	u32 bufferSize;
+	u8 *buffer;
+	u8 *fileData;
+
+	if (s_specialNightsOxideModelTried)
+	{
+		return s_specialNightsOxideModel;
+	}
+
+	// Only read while the load queue is idle; the read reuses its slot state.
+	if ((bigfile == NULL) || (sdata->queueLength != 0) || (sdata->load_inProgress != 0) || (sdata->Loading.stage != LOAD_IDLE))
+	{
+		return NULL;
+	}
+
+	s_specialNightsOxideModelTried = true;
+
+	entry = BIG_GETENTRY((struct BigHeader *)((char *)bigfile + (BI_RACERMODELHI + NITROS_OXIDE) * sizeof(struct BigEntry)));
+	bufferSize = (((u32)entry->size + LOAD_CD_DATA_SECTOR_ROUND_MASK) >> LOAD_CD_DATA_SECTOR_SHIFT) << LOAD_CD_DATA_SECTOR_SHIFT;
+	buffer = (u8 *)calloc(1, bufferSize);
+	if (buffer == NULL)
+	{
+		return NULL;
+	}
+
+	// Synchronous DRAM read + pointer-map relocation; returns the data past the map header.
+	fileData = (u8 *)LOAD_DramFile(bigfile, BI_RACERMODELHI + NITROS_OXIDE, buffer, &size, -1);
+	if (fileData == NULL)
+	{
+		free(buffer);
+		return NULL;
+	}
+
+	s_specialNightsOxideModel = (struct Model *)(fileData + LOAD_MODEL_FILE_HEADER_BYTES);
+	return s_specialNightsOxideModel;
+}
+
 // Character select: Oxide has no grid icon, so fold him back into the Fake Crash slot.
 void SpecialNights_FoldMenuCharacters(void)
 {

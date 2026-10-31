@@ -452,6 +452,17 @@ LAB_Characters_DrawWindows_Loop:
 	driverInst->animIndex = 0;
 
 	model = MM_Characters_GetModelByName(characterMetadata[(int)*currCharacterID].name_Debug);
+#if defined(CTR_NATIVE)
+	// Special Nights: Oxide's preview kart is loaded on demand (not in the menu LEV).
+	if (SpecialNights_DisplayCharacterID(indexOrSlideFactor, *currCharacterID) == NITROS_OXIDE)
+	{
+		struct Model *oxideModel = SpecialNights_GetOxidePreviewModel();
+		if (oxideModel != NULL)
+		{
+			model = oxideModel;
+		}
+	}
+#endif
 
 	// set modelPtr in Instance
 	driverInst->model = model;

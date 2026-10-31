@@ -459,6 +459,7 @@ s32 SpecialNights_DisplayCharacterID(s32 playerIndex, s32 characterID);
 void SpecialNights_DrawOxideHint(s32 characterID, s32 posX, s32 posY);
 void SpecialNights_ApplyRaceCharacters(s16 levelID);
 void SpecialNights_FoldMenuCharacters(void);
+struct Model *SpecialNights_GetOxidePreviewModel(void);
 #endif
 #if defined(CTR_NATIVE)
 s16 MainRaceTrack_QuickStartBootLevel(struct GameTracker *gt, s16 levelID);
