@@ -635,7 +635,13 @@ SkipText:
 	columnWave[3] = RACE_FLAG_WAVE[3];
 	columnWave[4] = RACE_FLAG_WAVE[4];
 
+#if defined(CTR_NATIVE)
+	// Widescreen: extra columns carry the flag across the right-hand side area.
+	const s32 raceFlagColumnCount = (NativeDisplay_GetSideExtension(SCREEN_WIDTH) > 0) ? 39 : 35;
+	for (column = 1; column < raceFlagColumnCount; ++column)
+#else
 	for (column = 1; column < 35; ++column)
+#endif
 	{
 		{
 			// Alternate two 30-vertex scratch banks; keep the byte offset separate from the cursor base.
@@ -710,13 +716,19 @@ SkipText:
 				{
 					const u32 screenMaxXY = (216u << 16) | 512u;
 					// Keep packed-word subtraction: an X borrow affects the Y halfword too.
-					if (((((((readScreen[0] & (readScreen[1] & RaceFlag_ScreenSignMask())) & RaceFlag_ScreenSignMask()) & writeScreen[0]) &
+#if defined(CTR_NATIVE)
+					// Widescreen side areas lie outside 0..512; let the renderer's scissor clip instead.
+					if ((NativeDisplay_GetSideExtension(SCREEN_WIDTH) > 0) || (
+#else
+					if ((
+#endif
+					    ((((((readScreen[0] & (readScreen[1] & RaceFlag_ScreenSignMask())) & RaceFlag_ScreenSignMask()) & writeScreen[0]) &
 					       RaceFlag_ScreenSignMask()) &
 					      writeScreen[1]) == 0) &&
 					    (((((((screenMaxXY - readScreen[0]) & ((screenMaxXY - readScreen[1]) & RaceFlag_ScreenSignMask())) & RaceFlag_ScreenSignMask()) &
 					        (screenMaxXY - writeScreen[0])) &
 					       RaceFlag_ScreenSignMask()) &
-					      (screenMaxXY - writeScreen[1])) == 0))
+					      (screenMaxXY - writeScreen[1])) == 0)))
 					{
 						struct DB *back = GAME_TRACKER->backBuffer;
 						POLY_G4 *next = back->primMem.cursor;

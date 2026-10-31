@@ -203,9 +203,28 @@ int NativeGpu_RestoreState(const void *src, int srcSize)
 	return 1;
 }
 
+// NOTE: Native renders dfe draws into the host frame and dfe=0 draws into an
+// offscreen VRAM target. CTR's DecalMP impostors keep dfe set while rendering
+// into texture VRAM right of the display page; on PS1 that simply writes VRAM,
+// so treat any draw area entirely right of the display as offscreen.
+internal bool NativeGpu_DrawEnvIsOnScreen(const DRAWENV *drawEnv, const DISPENV *dispEnv)
+{
+	if (!drawEnv->dfe)
+	{
+		return false;
+	}
+
+	if ((dispEnv->disp.w > 0) && (drawEnv->clip.x >= dispEnv->disp.x + dispEnv->disp.w))
+	{
+		return false;
+	}
+
+	return true;
+}
+
 internal void DrawEnvDimensionsInt(int *width, int *height)
 {
-	if (activeDrawEnv.dfe)
+	if (NativeGpu_DrawEnvIsOnScreen(&activeDrawEnv, &activeDispEnv))
 	{
 		*width = activeDispEnv.disp.w;
 		*height = activeDispEnv.disp.h;
@@ -219,7 +238,7 @@ internal void DrawEnvDimensionsInt(int *width, int *height)
 
 void DrawEnvOffset(float *ofsX, float *ofsY)
 {
-	if (activeDrawEnv.dfe)
+	if (NativeGpu_DrawEnvIsOnScreen(&activeDrawEnv, &activeDispEnv))
 	{
 		int w, h;
 		DrawEnvDimensionsInt(&w, &h);
@@ -758,7 +777,7 @@ internal bool NativeGpu_TPageOverlapsActiveDrawPage(int tpage)
 	const int pageW = 0x100;
 	const int pageH = 0x100;
 
-	if (!activeDrawEnv.dfe)
+	if (!NativeGpu_DrawEnvIsOnScreen(&activeDrawEnv, &activeDispEnv))
 	{
 		return false;
 	}
@@ -873,7 +892,7 @@ void DrawSplit(const GPUDrawSplit *split)
 		NativeRenderer_PushDebugLabel(split->debugText);
 	}
 
-	const bool drawOnScreen = split->drawenv.dfe;
+	const bool drawOnScreen = NativeGpu_DrawEnvIsOnScreen(&split->drawenv, &split->dispenv);
 	if ((split->drawenv.clip.w <= 0) || (split->drawenv.clip.h <= 0))
 	{
 		// NOTE(aalhendi): VS/Battle end previews can shrink a losing viewport

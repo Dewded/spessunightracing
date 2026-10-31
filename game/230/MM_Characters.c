@@ -1523,9 +1523,8 @@ outerPlayerLoopComplete:
 				// draw string
 				DecalFont_DrawLine(*characterNameSlot, namePosX, namePosY, fontType, (JUSTIFY_CENTER | ORANGE));
 #if defined(CTR_NATIVE)
-				// Engine class one line under the name; above it for 4P bottom-row windows.
-				SpecialNights_DrawEngineClass(menuPlayerIndex, preInputCharacterMeta->characterID, namePosX,
-				                              ((numPlyrNextGame == 4) && (menuPlayerIndex >= 2)) ? (namePosY - 10) : (namePosY + 10), fontType);
+				// Engine class inside the top edge of the driver window, clear of the name and icons.
+				SpecialNights_DrawEngineClass(menuPlayerIndex, preInputCharacterMeta->characterID, namePosX, nameBaseY + 4, FONT_SMALL);
 #endif
 			}
 
