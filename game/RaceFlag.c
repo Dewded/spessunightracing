@@ -593,7 +593,15 @@ SkipText:
 	CTR_GteSetRotMatrix(&RACE_FLAG_MATRIX);
 	CTR_GteSetTransMatrix(&RACE_FLAG_MATRIX);
 	CTR_GteSetGeomOffset(256, 120);
+#if defined(CTR_NATIVE)
+	// Widescreen: zoom the flag by the screen's widening (682/512) around the
+	// centre so the original 4:3 coverage spans the side areas too. Extending
+	// the mesh instead fails: its right side recedes into the distance and its
+	// left side bends behind the camera.
+	gte_SetGeomScreen((256 * (SCREEN_WIDTH + 2 * NativeDisplay_GetSideExtension(SCREEN_WIDTH))) / SCREEN_WIDTH);
+#else
 	gte_SetGeomScreen(256);
+#endif
 	firstWave = RACE_FLAG_WAVE;
 	poly = 0;
 	writeScreen = RACE_FLAG_SCREEN_BASE;
@@ -635,13 +643,7 @@ SkipText:
 	columnWave[3] = RACE_FLAG_WAVE[3];
 	columnWave[4] = RACE_FLAG_WAVE[4];
 
-#if defined(CTR_NATIVE)
-	// Widescreen: extra columns carry the flag across the right-hand side area.
-	const s32 raceFlagColumnCount = (NativeDisplay_GetSideExtension(SCREEN_WIDTH) > 0) ? 39 : 35;
-	for (column = 1; column < raceFlagColumnCount; ++column)
-#else
 	for (column = 1; column < 35; ++column)
-#endif
 	{
 		{
 			// Alternate two 30-vertex scratch banks; keep the byte offset separate from the cursor base.
@@ -796,5 +798,9 @@ SkipText:
 		rightLight = leftLight;
 	}
 
+#if defined(CTR_NATIVE)
+	// Leave the GTE as retail does after the flag.
+	gte_SetGeomScreen(256);
+#endif
 	sdata->RaceFlag_ElapsedTime = (s32)(((u32)sdata->RaceFlag_ElapsedTime) + (GAME_TRACKER->elapsedTimeMS * 100));
 }
