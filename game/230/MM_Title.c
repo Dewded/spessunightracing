@@ -141,6 +141,16 @@ HANDLE_EXITING:
 		MM_DESIRED_MENU = &MM_MENU_HIGH_SCORES;
 		break;
 
+#if defined(CTR_NATIVE)
+	// Special Nights stats screen
+	case MM_EXIT_ROUTE_SPECIAL_NIGHTS_STATS:
+
+		MM_Title_CameraReset();
+		MM_SpecialNightsStats_Init();
+		MM_DESIRED_MENU = MM_SpecialNightsStats_Menu();
+		break;
+#endif
+
 	// demo mode
 	case MM_EXIT_ROUTE_DEMO:
 

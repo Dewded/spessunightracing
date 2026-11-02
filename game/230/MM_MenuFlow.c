@@ -63,6 +63,11 @@ void MM_MenuProc_Main(struct RectMenu *menu)
 	{
 		MM_MENU_MAIN.rows = MM_ROWS_MAIN_WITH_SCRAPBOOK;
 	}
+#if defined(CTR_NATIVE)
+	// Special Nights: "SPESSU STATS" row after HIGH SCORE.
+	MM_MENU_MAIN.rows =
+	    SpecialNights_MainMenuRows((MM_GAME_UNLOCKS[MEMCARD_BIT_WORD(GAME_UNLOCK_BIT_SCRAPBOOK)] & MEMCARD_BIT_MASK(GAME_UNLOCK_BIT_SCRAPBOOK)) != 0);
+#endif
 
 	MM_ParseCheatCodes();
 	MM_ToggleRows_Difficulty();
@@ -163,6 +168,16 @@ void MM_MenuProc_Main(struct RectMenu *menu)
 
 	// get LNG index of row selected
 	choose = mainMenu->rows[mainMenu->rowSelected].stringIndex;
+
+#if defined(CTR_NATIVE)
+	if (SpecialNights_IsStatsRow(choose))
+	{
+		// Leave main menu hierarchy for the stats screen
+		MM_TITLE_MENU_STATE = TITLE_MENU_STATE_EXITING;
+		MM_DESIRED_MENU_INDEX = MM_EXIT_ROUTE_SPECIAL_NIGHTS_STATS;
+		return;
+	}
+#endif
 
 	switch (choose)
 	{

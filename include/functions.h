@@ -464,6 +464,14 @@ void SpecialNights_DrawProfile(s32 playerIndex, s32 posX, s32 posY);
 void SpecialNights_StatsFrame(struct GameTracker *gGT);
 void SpecialNights_StatsRecordRace(struct GameTracker *gGT, const int *pointsPerPosition);
 void SpecialNights_StatsRecordCupEnd(struct GameTracker *gGT);
+void SpecialNights_PatchLanguageStrings(void);
+struct MenuRow *SpecialNights_MainMenuRows(b32 withScrapbook);
+b32 SpecialNights_IsStatsRow(s32 stringIndex);
+void MM_SpecialNightsStats_Init(void);
+struct RectMenu *MM_SpecialNightsStats_Menu(void);
+void MM_SpecialNightsStats_MenuProc(struct RectMenu *menu);
+// Title menu exit route to the stats screen (retail routes are 0-5).
+#define MM_EXIT_ROUTE_SPECIAL_NIGHTS_STATS 0x40
 struct Model *SpecialNights_GetOxidePreviewModel(void);
 #endif
 #if defined(CTR_NATIVE)

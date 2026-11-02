@@ -60,4 +60,7 @@ void LOAD_LangFile(s32 bigfilePtr, s32 lang)
 		strArray[i] = (char *)((u32)strArray[i] + (u32)lngFile);
 		i++;
 	} while (i < numStrings);
+#if defined(CTR_NATIVE)
+	SpecialNights_PatchLanguageStrings();
+#endif
 }

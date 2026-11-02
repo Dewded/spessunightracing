@@ -326,3 +326,6 @@
 #include "230/MM_HighScore.c"
 #include "230/MM_Scrapbook.c"
 #include "230/MM_Video.c"
+#if defined(CTR_NATIVE)
+#include "230/MM_SpecialNightsStats.c"
+#endif
