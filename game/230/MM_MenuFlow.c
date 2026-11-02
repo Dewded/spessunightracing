@@ -58,6 +58,11 @@ void MM_MenuProc_Main(struct RectMenu *menu)
 
 	mainMenu = menu;
 
+#if defined(CTR_NATIVE)
+	// Special Nights: "SPESSU NIGHT" on the title logo ribbon.
+	SpecialNights_RibbonUpdate();
+#endif
+
 	// if scrapbook is unlocked, change "rows" to extended array
 	if ((MM_GAME_UNLOCKS[MEMCARD_BIT_WORD(GAME_UNLOCK_BIT_SCRAPBOOK)] & MEMCARD_BIT_MASK(GAME_UNLOCK_BIT_SCRAPBOOK)) != 0)
 	{

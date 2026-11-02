@@ -254,6 +254,9 @@ void LOAD_VramFileCallback(struct LoadQueueSlot *lqs)
 
 	// LOAD_NextQueuedFile waits 3 vsync frames before releasing the queue.
 	GAME_LOAD_VRAM_FINISHED = GAME_TRACKER->frameTimer_VsyncCallback;
+#if defined(CTR_NATIVE)
+	SpecialNights_RibbonVramUploaded();
+#endif
 }
 
 void *LOAD_VramFile(void *bigfilePtr, int subfileIndex, void *ptrDestination, u32 *sizePtr, int callbackOrFlags)

@@ -262,6 +262,7 @@
 #include "PlayLevel.c"
 #include "SpecialNights.c"
 #include "SpecialNightsStats.c"
+#include "SpecialNightsRibbon.c"
 
 #include "230.c"
 

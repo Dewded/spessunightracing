@@ -465,6 +465,8 @@ void SpecialNights_StatsFrame(struct GameTracker *gGT);
 void SpecialNights_StatsRecordRace(struct GameTracker *gGT, const int *pointsPerPosition);
 void SpecialNights_StatsRecordCupEnd(struct GameTracker *gGT);
 void SpecialNights_PatchLanguageStrings(void);
+void SpecialNights_RibbonVramUploaded(void);
+void SpecialNights_RibbonUpdate(void);
 struct MenuRow *SpecialNights_MainMenuRows(b32 withScrapbook);
 b32 SpecialNights_IsStatsRow(s32 stringIndex);
 void MM_SpecialNightsStats_Init(void);
