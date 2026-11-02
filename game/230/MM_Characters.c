@@ -1042,6 +1042,7 @@ dontDrawSelectCharacter:
 		if ((MM_CHARACTER_SELECT_MENU_STATE == IN_MENU) && ((((int)(s16)MM_CHARACTER_SELECT_FLAGS >> playerIndex) & 1U) == 0))
 		{
 			SpecialNights_CycleEngineClass(playerIndex, MM_GAME_BUTTON_TAPS[playerIndex]);
+			SpecialNights_CycleProfile(playerIndex, MM_GAME_BUTTON_TAPS[playerIndex]);
 		}
 #endif
 
@@ -1557,6 +1558,7 @@ outerPlayerLoopComplete:
 #if defined(CTR_NATIVE)
 				// Engine class inside the top edge of the driver window, clear of the name and icons.
 				SpecialNights_DrawEngineClass(menuPlayerIndex, preInputCharacterMeta->characterID, namePosX, nameBaseY + 4, FONT_SMALL);
+				SpecialNights_DrawProfile(menuPlayerIndex, namePosX, nameBaseY + 14);
 #endif
 			}
 

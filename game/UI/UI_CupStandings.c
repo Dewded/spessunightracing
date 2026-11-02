@@ -458,6 +458,9 @@ void UI_CupStandings_InputAndDraw(void)
 
 			// update cup rank of all drivers
 			UI_CupStandings_UpdateCupRanks();
+#if defined(CTR_NATIVE)
+			SpecialNights_StatsRecordRace(gGT, points);
+#endif
 		}
 
 		// If this is not the first frame of track standings
@@ -506,6 +509,9 @@ void UI_CupStandings_InputAndDraw(void)
 				if ((gGT->gameMode2 & CUP_ANY_KIND) != 0)
 				{
 					UI_CupStandings_FinalizeCupRanks();
+#if defined(CTR_NATIVE)
+					SpecialNights_StatsRecordCupEnd(gGT);
+#endif
 				}
 
 				gGT->cup.trackIndex = 0;

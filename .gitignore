@@ -17,6 +17,11 @@
 /memcards/
 *.log
 
+# Special Nights stats (keep your own backups; never commit the group's data).
+/special_nights_stats.jsonl
+/special_nights.db
+/special_nights_players.txt
+
 # Compiler outputs.
 *.exe
 *.o

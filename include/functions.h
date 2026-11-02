@@ -459,6 +459,11 @@ void SpecialNights_DrawEngineClass(s32 playerIndex, s32 characterID, s32 posX, s
 struct CharacterSelectMeta;
 struct CharacterSelectMeta *SpecialNights_CharacterSelectMeta(s32 layoutIndex, const struct CharacterSelectMeta *retail);
 s32 SpecialNights_IconTransitionIndex(s32 layoutIndex, s32 iconIndex);
+void SpecialNights_CycleProfile(s32 playerIndex, u32 buttonTaps);
+void SpecialNights_DrawProfile(s32 playerIndex, s32 posX, s32 posY);
+void SpecialNights_StatsFrame(struct GameTracker *gGT);
+void SpecialNights_StatsRecordRace(struct GameTracker *gGT, const int *pointsPerPosition);
+void SpecialNights_StatsRecordCupEnd(struct GameTracker *gGT);
 struct Model *SpecialNights_GetOxidePreviewModel(void);
 #endif
 #if defined(CTR_NATIVE)

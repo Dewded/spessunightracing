@@ -147,6 +147,12 @@ if(BUILD_TESTING)
             -s ${CMAKE_SOURCE_DIR}/tools/matching
             -p test_*.py
     )
+    add_test(
+        NAME special_nights_stats_unit
+        COMMAND ${Python3_EXECUTABLE} -m unittest discover
+            -s ${CMAKE_SOURCE_DIR}/tools/special_nights
+            -p test_*.py
+    )
 
     if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
         add_executable(ctr_particle_renderer_smoke
