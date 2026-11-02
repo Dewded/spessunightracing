@@ -3,18 +3,19 @@
 // Special Nights player profiles and cup statistics (native builds only).
 //
 // Each human picks a player profile on character select (L2/R2). A cup is
-// recorded only when every human has a distinct profile. Every finished race
-// and every finished cup appends one JSON line to SPECIAL_NIGHTS_STATS_FILE;
-// tools/special_nights/stats.py builds a SQLite database and reports from it.
+// recorded only when every human has a distinct profile. Every scored race and
+// every finished cup is written straight into the SQLite database
+// SPECIAL_NIGHTS_DB_FILE (schema: tools/special_nights/schema.sql);
+// tools/special_nights/stats.py prints reports from it.
 
 #if defined(CTR_NATIVE)
 #include <platform/native_log.h>
-#include <stdarg.h>
+#include <sqlite3.h>
+#include <special_nights_schema.h>
 #include <time.h>
 
-#define SPECIAL_NIGHTS_STATS_FILE       "special_nights_stats.jsonl"
+#define SPECIAL_NIGHTS_DB_FILE          "special_nights.db"
 #define SPECIAL_NIGHTS_PLAYERS_FILE     "special_nights_players.txt"
-#define SPECIAL_NIGHTS_STATS_VERSION    1
 #define SPECIAL_NIGHTS_ROSTER_MAX       16
 #define SPECIAL_NIGHTS_NAME_BYTES       48
 #define SPECIAL_NIGHTS_DISPLAY_BYTES    24
@@ -356,126 +357,170 @@ void SpecialNights_StatsFrame(struct GameTracker *gGT)
 }
 
 // ---------------------------------------------------------------------------
-// JSON lines
+// Database
 
-struct SpecialNightsJson
+internal void SpecialNights_DbLogError(sqlite3 *db, const char *what)
 {
-	char text[8192];
-	u32 length;
-};
-
-internal void SpecialNights_JsonRaw(struct SpecialNightsJson *json, const char *fmt, ...)
-{
-	va_list args;
-	s32 written;
-
-	if (json->length >= sizeof(json->text))
-	{
-		return;
-	}
-
-	va_start(args, fmt);
-	written = vsnprintf(&json->text[json->length], sizeof(json->text) - json->length, fmt, args);
-	va_end(args);
-
-	if (written > 0)
-	{
-		json->length += (u32)written;
-		if (json->length > sizeof(json->text) - 1)
-		{
-			json->length = sizeof(json->text) - 1;
-		}
-	}
+	Platform_LogWarn("[Special Nights] database: %s failed: %s\n", what, (db != NULL) ? sqlite3_errmsg(db) : "out of memory");
 }
 
-internal void SpecialNights_JsonString(struct SpecialNightsJson *json, const char *str)
+internal b32 SpecialNights_DbExec(sqlite3 *db, const char *sql, const char *what)
 {
-	SpecialNights_JsonRaw(json, "\"");
-	for (const u8 *c = (const u8 *)((str != NULL) ? str : ""); *c != 0; c++)
+	char *error = NULL;
+
+	if (sqlite3_exec(db, sql, NULL, NULL, &error) != SQLITE_OK)
 	{
-		if ((*c == '"') || (*c == '\\'))
-		{
-			SpecialNights_JsonRaw(json, "\\%c", *c);
-		}
-		else if (*c < 0x20)
-		{
-			SpecialNights_JsonRaw(json, "\\u%04x", *c);
-		}
-		else
-		{
-			SpecialNights_JsonRaw(json, "%c", *c);
-		}
+		Platform_LogWarn("[Special Nights] database: %s failed: %s\n", what, (error != NULL) ? error : "?");
+		sqlite3_free(error);
+		return false;
 	}
-	SpecialNights_JsonRaw(json, "\"");
+
+	return true;
 }
 
-internal void SpecialNights_JsonTicksMs(struct SpecialNightsJson *json, s32 ticks)
+// Opens (creating if needed) the stats database. Kept closed between writes so
+// other programs can read it while the game runs.
+internal sqlite3 *SpecialNights_DbOpen(void)
 {
-	if (ticks < 0)
+	sqlite3 *db = NULL;
+
+	if (sqlite3_open_v2(SPECIAL_NIGHTS_DB_FILE, &db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL) != SQLITE_OK)
 	{
-		SpecialNights_JsonRaw(json, "null");
+		SpecialNights_DbLogError(db, "open " SPECIAL_NIGHTS_DB_FILE);
+		sqlite3_close(db);
+		return NULL;
+	}
+
+	sqlite3_busy_timeout(db, 2000);
+	if (!SpecialNights_DbExec(db, SPECIAL_NIGHTS_SCHEMA_SQL, "schema"))
+	{
+		sqlite3_close(db);
+		return NULL;
+	}
+
+	return db;
+}
+
+internal sqlite3_stmt *SpecialNights_DbPrepare(sqlite3 *db, const char *sql)
+{
+	sqlite3_stmt *stmt = NULL;
+
+	if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) != SQLITE_OK)
+	{
+		SpecialNights_DbLogError(db, "prepare");
+		return NULL;
+	}
+
+	return stmt;
+}
+
+// Runs a prepared statement to completion and resets it for the next bind.
+internal b32 SpecialNights_DbStep(sqlite3 *db, sqlite3_stmt *stmt, const char *what)
+{
+	b32 ok = (sqlite3_step(stmt) == SQLITE_DONE);
+
+	if (!ok)
+	{
+		SpecialNights_DbLogError(db, what);
+	}
+	sqlite3_reset(stmt);
+	sqlite3_clear_bindings(stmt);
+	return ok;
+}
+
+internal void SpecialNights_DbBindText(sqlite3_stmt *stmt, s32 index, const char *text)
+{
+	if (text != NULL)
+	{
+		sqlite3_bind_text(stmt, index, text, -1, SQLITE_TRANSIENT);
 	}
 	else
 	{
-		SpecialNights_JsonRaw(json, "%ld", (long)(((s64)ticks * 1000) / SPECIAL_NIGHTS_TICKS_PER_SECOND));
+		sqlite3_bind_null(stmt, index);
 	}
 }
 
-internal void SpecialNights_JsonDriverIdentity(struct SpecialNightsJson *json, struct GameTracker *gGT, s32 driverID)
+internal void SpecialNights_DbBindTicksMs(sqlite3_stmt *stmt, s32 index, s32 ticks)
 {
-	s32 characterID = GAME_CHARACTER_IDS[driverID];
-	b32 human = (driverID < gGT->numPlyrCurrGame);
-
-	SpecialNights_JsonRaw(json, "\"slot\":%d,\"human\":%s,\"player\":", driverID, human ? "true" : "false");
-	if (human)
+	if (ticks >= 0)
 	{
-		SpecialNights_JsonString(json, s_specialNightsRoster[s_specialNightsProfile[driverID]]);
+		sqlite3_bind_int64(stmt, index, ((s64)ticks * 1000) / SPECIAL_NIGHTS_TICKS_PER_SECOND);
 	}
 	else
 	{
-		SpecialNights_JsonRaw(json, "null");
+		sqlite3_bind_null(stmt, index);
 	}
-	SpecialNights_JsonRaw(json, ",\"character_id\":%d,\"character\":", characterID);
-	SpecialNights_JsonString(json, GAME_CHARACTER_METADATA[characterID].name_Debug);
-	SpecialNights_JsonRaw(json, ",\"engine\":");
-	SpecialNights_JsonString(json, s_specialNightsEngineLabels[SpecialNights_DriverEngineClass(driverID)]);
 }
 
-internal void SpecialNights_JsonEventHeader(struct SpecialNightsJson *json, struct GameTracker *gGT, const char *type)
+internal void SpecialNights_LocalTime(char *out, u32 outBytes, const char *format)
 {
-	char timestamp[32];
 	time_t now = time(NULL);
 	struct tm *local = localtime(&now);
-	s32 cupID = gGT->cup.cupID;
 
-	if ((local == NULL) || (strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%S", local) == 0))
+	if ((local == NULL) || (strftime(out, outBytes, format, local) == 0))
 	{
-		timestamp[0] = 0;
+		snprintf(out, outBytes, "%ld", (long)now);
 	}
-
-	SpecialNights_JsonRaw(json, "{\"type\":\"%s\",\"version\":%d,\"cup_run\":", type, SPECIAL_NIGHTS_STATS_VERSION);
-	SpecialNights_JsonString(json, s_specialNightsCupRun);
-	SpecialNights_JsonRaw(json, ",\"recorded_at\":");
-	SpecialNights_JsonString(json, timestamp);
-	SpecialNights_JsonRaw(json, ",\"mode\":\"%s\",\"cup_id\":%d,\"cup_name\":", (gGT->numBotsNextGame == 0) ? "vs" : "arcade", cupID);
-	SpecialNights_JsonString(json, ((cupID >= 0) && (cupID < (s32)len(data.ArcadeCups))) ? sdata->lngStrings[data.ArcadeCups[cupID].lngIndex_CupName] : "");
-	SpecialNights_JsonRaw(json, ",\"difficulty\":%d,\"humans\":%d,\"drivers_in_cup\":%d", gGT->arcadeDifficulty, gGT->numPlyrCurrGame,
-	                      gGT->numPlyrCurrGame + gGT->numBotsNextGame);
 }
 
-internal void SpecialNights_AppendJsonLine(struct SpecialNightsJson *json)
+internal const char *SpecialNights_DriverPlayer(struct GameTracker *gGT, s32 driverID)
 {
-	FILE *file = fopen(SPECIAL_NIGHTS_STATS_FILE, "ab");
+	return (driverID < gGT->numPlyrCurrGame) ? s_specialNightsRoster[s_specialNightsProfile[driverID]] : NULL;
+}
 
-	if (file == NULL)
+internal const char *SpecialNights_CupName(struct GameTracker *gGT)
+{
+	s32 cupID = gGT->cup.cupID;
+
+	return ((cupID >= 0) && (cupID < (s32)len(data.ArcadeCups))) ? sdata->lngStrings[data.ArcadeCups[cupID].lngIndex_CupName] : NULL;
+}
+
+// Inserts the players and the cup run if missing (every race does this, so a
+// race always has its parents even if the first write failed).
+internal b32 SpecialNights_DbInsertCupRun(sqlite3 *db, struct GameTracker *gGT, const char *timestamp)
+{
+	sqlite3_stmt *player = SpecialNights_DbPrepare(db, "INSERT OR IGNORE INTO players (name) VALUES (?1)");
+	sqlite3_stmt *cup = SpecialNights_DbPrepare(db, "INSERT OR IGNORE INTO cup_runs (cup_run, started_at, mode, cup_id, cup_name, difficulty, humans, drivers_in_cup) "
+	                                                "VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)");
+	b32 ok = (player != NULL) && (cup != NULL);
+
+	for (s32 driverID = 0; ok && (driverID < gGT->numPlyrCurrGame); driverID++)
 	{
-		Platform_LogWarn("[Special Nights] could not open %s for writing\n", SPECIAL_NIGHTS_STATS_FILE);
-		return;
+		SpecialNights_DbBindText(player, 1, SpecialNights_DriverPlayer(gGT, driverID));
+		ok = SpecialNights_DbStep(db, player, "insert player");
 	}
 
-	fputs(json->text, file);
-	fputc('\n', file);
-	fclose(file);
+	if (ok)
+	{
+		SpecialNights_DbBindText(cup, 1, s_specialNightsCupRun);
+		SpecialNights_DbBindText(cup, 2, timestamp);
+		SpecialNights_DbBindText(cup, 3, (gGT->numBotsNextGame == 0) ? "vs" : "arcade");
+		sqlite3_bind_int(cup, 4, gGT->cup.cupID);
+		SpecialNights_DbBindText(cup, 5, SpecialNights_CupName(gGT));
+		sqlite3_bind_int(cup, 6, gGT->arcadeDifficulty);
+		sqlite3_bind_int(cup, 7, gGT->numPlyrCurrGame);
+		sqlite3_bind_int(cup, 8, gGT->numPlyrCurrGame + gGT->numBotsNextGame);
+		ok = SpecialNights_DbStep(db, cup, "insert cup run");
+	}
+
+	sqlite3_finalize(player);
+	sqlite3_finalize(cup);
+	return ok;
+}
+
+// Commits on success, rolls back otherwise, and closes the database.
+internal void SpecialNights_DbFinish(sqlite3 *db, b32 ok, const char *what)
+{
+	if (ok && SpecialNights_DbExec(db, "COMMIT", "commit"))
+	{
+		Platform_Log("[Special Nights] %s saved to %s (cup %s)\n", what, SPECIAL_NIGHTS_DB_FILE, s_specialNightsCupRun);
+	}
+	else
+	{
+		SpecialNights_DbExec(db, "ROLLBACK", "rollback");
+		Platform_LogWarn("[Special Nights] %s was NOT saved (cup %s)\n", what, s_specialNightsCupRun);
+	}
+	sqlite3_close(db);
 }
 
 // ---------------------------------------------------------------------------
@@ -484,9 +529,14 @@ internal void SpecialNights_AppendJsonLine(struct SpecialNightsJson *json)
 // Called on the first frame of track standings, after this race's points are added.
 void SpecialNights_StatsRecordRace(struct GameTracker *gGT, const int *pointsPerPosition)
 {
-	struct SpecialNightsJson json;
+	char timestamp[32];
+	sqlite3 *db;
+	sqlite3_stmt *race;
+	sqlite3_stmt *result;
+	s64 raceID;
 	s32 numDrivers = gGT->numPlyrCurrGame + gGT->numBotsNextGame;
 	s32 levelID = gGT->levelID;
+	b32 ok;
 
 	if (!SpecialNights_InStatsCup(gGT))
 	{
@@ -495,15 +545,9 @@ void SpecialNights_StatsRecordRace(struct GameTracker *gGT, const int *pointsPer
 
 	if (gGT->cup.trackIndex == 0)
 	{
-		time_t now = time(NULL);
-		struct tm *local = localtime(&now);
-
 		// First race of a cup: open a new cup run if every human is a confirmed player.
 		s_specialNightsCupRecording = SpecialNights_ProfilesConfirmed(gGT->numPlyrCurrGame);
-		if ((local == NULL) || (strftime(s_specialNightsCupRun, sizeof(s_specialNightsCupRun), "%Y%m%d-%H%M%S", local) == 0))
-		{
-			snprintf(s_specialNightsCupRun, sizeof(s_specialNightsCupRun), "run-%ld", (long)now);
-		}
+		SpecialNights_LocalTime(s_specialNightsCupRun, sizeof(s_specialNightsCupRun), "%Y%m%d-%H%M%S");
 		Platform_Log("[Special Nights] cup %s %s\n", s_specialNightsCupRun,
 		             s_specialNightsCupRecording ? "is being recorded" : "is NOT recorded (every human needs a player name)");
 	}
@@ -518,19 +562,64 @@ void SpecialNights_StatsRecordRace(struct GameTracker *gGT, const int *pointsPer
 		numDrivers = SPECIAL_NIGHTS_STATS_DRIVERS;
 	}
 
-	json.length = 0;
-	json.text[0] = 0;
-	SpecialNights_JsonEventHeader(&json, gGT, "race");
-	SpecialNights_JsonRaw(&json, ",\"track_index\":%d,\"level_id\":%d,\"track_name\":", gGT->cup.trackIndex, levelID);
-	SpecialNights_JsonString(&json, ((levelID >= 0) && (levelID < (s32)len(data.metaDataLEV))) ? sdata->lngStrings[data.metaDataLEV[levelID].name_LNG] : "");
-	SpecialNights_JsonRaw(&json, ",\"laps\":%d,\"results\":[", gGT->numLaps);
+	db = SpecialNights_DbOpen();
+	if (db == NULL)
+	{
+		return;
+	}
 
-	for (s32 place = 0; place < numDrivers; place++)
+	SpecialNights_LocalTime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%S");
+	race = NULL;
+	result = NULL;
+	ok = SpecialNights_DbExec(db, "BEGIN IMMEDIATE", "begin") && SpecialNights_DbInsertCupRun(db, gGT, timestamp);
+
+	// A repeated race (same cup run and track) replaces the earlier record; its results cascade.
+	if (ok)
+	{
+		race = SpecialNights_DbPrepare(db, "DELETE FROM races WHERE cup_run = ?1 AND track_index = ?2");
+		ok = (race != NULL);
+		if (ok)
+		{
+			SpecialNights_DbBindText(race, 1, s_specialNightsCupRun);
+			sqlite3_bind_int(race, 2, gGT->cup.trackIndex);
+			ok = SpecialNights_DbStep(db, race, "replace race");
+		}
+		sqlite3_finalize(race);
+		race = NULL;
+	}
+
+	if (ok)
+	{
+		race = SpecialNights_DbPrepare(db, "INSERT INTO races (cup_run, track_index, level_id, track_name, laps, recorded_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)");
+		ok = (race != NULL);
+		if (ok)
+		{
+			SpecialNights_DbBindText(race, 1, s_specialNightsCupRun);
+			sqlite3_bind_int(race, 2, gGT->cup.trackIndex);
+			sqlite3_bind_int(race, 3, levelID);
+			SpecialNights_DbBindText(race, 4,
+			                         ((levelID >= 0) && (levelID < (s32)len(data.metaDataLEV))) ? sdata->lngStrings[data.metaDataLEV[levelID].name_LNG] : NULL);
+			sqlite3_bind_int(race, 5, gGT->numLaps);
+			SpecialNights_DbBindText(race, 6, timestamp);
+			ok = SpecialNights_DbStep(db, race, "insert race");
+		}
+	}
+	raceID = sqlite3_last_insert_rowid(db);
+
+	if (ok)
+	{
+		result = SpecialNights_DbPrepare(db, "INSERT INTO race_results (race_id, slot, human, player, character, character_id, engine, place, points, cup_points, "
+		                                     "finished, race_time_ms, best_lap_ms, turbo_ms, avg_speed, top_speed, turbos) "
+		                                     "VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)");
+		ok = (result != NULL);
+	}
+
+	for (s32 place = 0; ok && (place < numDrivers); place++)
 	{
 		struct Driver *d = gGT->driversInRaceOrder[place];
 		struct SpecialNightsDriverStats *stats;
 		s32 driverID;
-		s32 points;
+		s32 characterID;
 
 		if (d == NULL)
 		{
@@ -538,49 +627,84 @@ void SpecialNights_StatsRecordRace(struct GameTracker *gGT, const int *pointsPer
 		}
 
 		driverID = d->driverID;
+		characterID = GAME_CHARACTER_IDS[driverID];
 		stats = &s_specialNightsDriverStats[driverID & (SPECIAL_NIGHTS_STATS_DRIVERS - 1)];
-		points = (gGT->numBotsNextGame == 0) ? (gGT->numPlyrCurrGame - (place + 1)) : pointsPerPosition[place];
 
-		SpecialNights_JsonRaw(&json, "%s{", (place == 0) ? "" : ",");
-		SpecialNights_JsonDriverIdentity(&json, gGT, driverID);
-		SpecialNights_JsonRaw(&json, ",\"place\":%d,\"points\":%d,\"cup_points\":%d,\"finished\":%s,\"race_time_ms\":", place + 1, points,
-		                      gGT->cup.points[driverID], (stats->finishTicks >= 0) ? "true" : "false");
-		SpecialNights_JsonTicksMs(&json, stats->finishTicks);
-		SpecialNights_JsonRaw(&json, ",\"best_lap_ms\":");
-		SpecialNights_JsonTicksMs(&json, stats->bestLapTicks);
-		SpecialNights_JsonRaw(&json, ",\"turbo_ms\":");
-		SpecialNights_JsonTicksMs(&json, stats->turboTicks);
-		SpecialNights_JsonRaw(&json, ",\"avg_speed\":%ld,\"top_speed\":%d,\"turbos\":%d}",
-		                      (long)((stats->sampledFrames != 0) ? (stats->speedSum / stats->sampledFrames) : 0), stats->topSpeed, d->numTurbos);
+		sqlite3_bind_int64(result, 1, raceID);
+		sqlite3_bind_int(result, 2, driverID);
+		sqlite3_bind_int(result, 3, driverID < gGT->numPlyrCurrGame);
+		SpecialNights_DbBindText(result, 4, SpecialNights_DriverPlayer(gGT, driverID));
+		SpecialNights_DbBindText(result, 5, GAME_CHARACTER_METADATA[characterID].name_Debug);
+		sqlite3_bind_int(result, 6, characterID);
+		SpecialNights_DbBindText(result, 7, s_specialNightsEngineLabels[SpecialNights_DriverEngineClass(driverID)]);
+		sqlite3_bind_int(result, 8, place + 1);
+		sqlite3_bind_int(result, 9, (gGT->numBotsNextGame == 0) ? (gGT->numPlyrCurrGame - (place + 1)) : pointsPerPosition[place]);
+		sqlite3_bind_int(result, 10, gGT->cup.points[driverID]);
+		sqlite3_bind_int(result, 11, stats->finishTicks >= 0);
+		SpecialNights_DbBindTicksMs(result, 12, stats->finishTicks);
+		SpecialNights_DbBindTicksMs(result, 13, stats->bestLapTicks);
+		SpecialNights_DbBindTicksMs(result, 14, stats->turboTicks);
+		sqlite3_bind_int64(result, 15, (stats->sampledFrames != 0) ? (s64)(stats->speedSum / stats->sampledFrames) : 0);
+		sqlite3_bind_int(result, 16, stats->topSpeed);
+		sqlite3_bind_int(result, 17, d->numTurbos);
+		ok = SpecialNights_DbStep(db, result, "insert race result");
 	}
 
-	SpecialNights_JsonRaw(&json, "]}");
-	SpecialNights_AppendJsonLine(&json);
+	sqlite3_finalize(race);
+	sqlite3_finalize(result);
+	SpecialNights_DbFinish(db, ok, "race");
 }
 
 // Called when the last race of a cup has been scored, before cup points reset.
 void SpecialNights_StatsRecordCupEnd(struct GameTracker *gGT)
 {
-	struct SpecialNightsJson json;
+	char timestamp[32];
+	sqlite3 *db;
+	sqlite3_stmt *stmt = NULL;
 	s32 numDrivers = gGT->numPlyrCurrGame + gGT->numBotsNextGame;
-	b32 first = true;
+	b32 ok;
 
 	if (!SpecialNights_InStatsCup(gGT) || !s_specialNightsCupRecording)
 	{
 		return;
 	}
+	s_specialNightsCupRecording = false;
 
 	if (numDrivers > SPECIAL_NIGHTS_STATS_DRIVERS)
 	{
 		numDrivers = SPECIAL_NIGHTS_STATS_DRIVERS;
 	}
 
-	json.length = 0;
-	json.text[0] = 0;
-	SpecialNights_JsonEventHeader(&json, gGT, "cup");
-	SpecialNights_JsonRaw(&json, ",\"results\":[");
+	db = SpecialNights_DbOpen();
+	if (db == NULL)
+	{
+		return;
+	}
 
-	for (s32 rank = 0; rank < SPECIAL_NIGHTS_STATS_DRIVERS; rank++)
+	SpecialNights_LocalTime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%S");
+	ok = SpecialNights_DbExec(db, "BEGIN IMMEDIATE", "begin") && SpecialNights_DbInsertCupRun(db, gGT, timestamp);
+
+	if (ok)
+	{
+		stmt = SpecialNights_DbPrepare(db, "DELETE FROM cup_results WHERE cup_run = ?1");
+		ok = (stmt != NULL);
+		if (ok)
+		{
+			SpecialNights_DbBindText(stmt, 1, s_specialNightsCupRun);
+			ok = SpecialNights_DbStep(db, stmt, "clear cup results");
+		}
+		sqlite3_finalize(stmt);
+		stmt = NULL;
+	}
+
+	if (ok)
+	{
+		stmt = SpecialNights_DbPrepare(db, "INSERT INTO cup_results (cup_run, slot, human, player, character, engine, final_place, points) "
+		                                   "VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)");
+		ok = (stmt != NULL);
+	}
+
+	for (s32 rank = 0; ok && (rank < SPECIAL_NIGHTS_STATS_DRIVERS); rank++)
 	{
 		s32 driverID = data.cupPositionPerPlayer[rank];
 
@@ -589,17 +713,33 @@ void SpecialNights_StatsRecordCupEnd(struct GameTracker *gGT)
 			continue;
 		}
 
-		SpecialNights_JsonRaw(&json, "%s{", first ? "" : ",");
-		SpecialNights_JsonDriverIdentity(&json, gGT, driverID);
-		SpecialNights_JsonRaw(&json, ",\"final_place\":%d,\"points\":%d}", rank + 1, gGT->cup.points[driverID]);
-		first = false;
+		SpecialNights_DbBindText(stmt, 1, s_specialNightsCupRun);
+		sqlite3_bind_int(stmt, 2, driverID);
+		sqlite3_bind_int(stmt, 3, driverID < gGT->numPlyrCurrGame);
+		SpecialNights_DbBindText(stmt, 4, SpecialNights_DriverPlayer(gGT, driverID));
+		SpecialNights_DbBindText(stmt, 5, GAME_CHARACTER_METADATA[GAME_CHARACTER_IDS[driverID]].name_Debug);
+		SpecialNights_DbBindText(stmt, 6, s_specialNightsEngineLabels[SpecialNights_DriverEngineClass(driverID)]);
+		sqlite3_bind_int(stmt, 7, rank + 1);
+		sqlite3_bind_int(stmt, 8, gGT->cup.points[driverID]);
+		ok = SpecialNights_DbStep(db, stmt, "insert cup result");
+	}
+	sqlite3_finalize(stmt);
+	stmt = NULL;
+
+	if (ok)
+	{
+		stmt = SpecialNights_DbPrepare(db, "UPDATE cup_runs SET completed = 1, ended_at = ?2 WHERE cup_run = ?1");
+		ok = (stmt != NULL);
+		if (ok)
+		{
+			SpecialNights_DbBindText(stmt, 1, s_specialNightsCupRun);
+			SpecialNights_DbBindText(stmt, 2, timestamp);
+			ok = SpecialNights_DbStep(db, stmt, "complete cup run");
+		}
+		sqlite3_finalize(stmt);
 	}
 
-	SpecialNights_JsonRaw(&json, "]}");
-	SpecialNights_AppendJsonLine(&json);
-	Platform_Log("[Special Nights] cup %s recorded to %s\n", s_specialNightsCupRun, SPECIAL_NIGHTS_STATS_FILE);
-
-	s_specialNightsCupRecording = false;
+	SpecialNights_DbFinish(db, ok, "cup result");
 }
 
 #endif

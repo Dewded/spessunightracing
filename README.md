@@ -198,18 +198,19 @@ Arcade and VS cups are recorded for the stats tables when every human player has
   `L2/R2 PLAYER` in red while none is picked. Two players can't hold the same name, and the choice is kept between
   races. The default names are JustusJulma, Zamiza, Arturo Senna, Memuli9000, Fröttis and Tom Lennon. A
   `special_nights_players.txt` file (UTF-8, one name per line, `#` for comments) in the game's base folder replaces them.
-- **What is recorded:** every finished race appends one JSON line to `special_nights_stats.jsonl` in the game's base
-  folder, which is the folder holding `assets/`. Each line records, for all 8 racers (AI included): place, points,
+- **What is recorded:** the game writes straight into `special_nights.db`, a SQLite database in the game's base
+  folder (the folder holding `assets/`). Each scored race stores, for all 8 racers (AI included): place, points,
   running cup points, character, engine class, race time, best lap, time on turbo, and average and top speed (in game
-  speed units). The end of a cup adds the final placements and point totals. The console and log say whether a cup is
-  being recorded.
+  speed units). The end of a cup stores the final placements and point totals. The console and log say whether a cup is
+  being recorded and confirm each save.
 - **Only finished, confirmed cups count:** if anyone has no name when the first race finishes, nothing in that cup is
-  written. If a cup is quit early, its races stay in the file but every table skips them.
-- **Reports and database:** `python tools/special_nights/stats.py special_nights_stats.jsonl` rebuilds
-  `special_nights.db` (SQLite) next to the file and prints the cup leaderboard, cup history, per-track results,
-  head-to-head records for races and cups, and track records. The database can be opened with any SQLite tool. Its
-  views `player_cup_summary`, `player_track_summary`, `head_to_head_races`, `head_to_head_cups` and `track_records`
-  hold the same tables. The JSON file is the source of truth: back it up, and rebuild the database whenever you like.
+  written. If a cup is quit early, its races stay in the database but every view and report skips them.
+- **Looking at the data:** `python tools/special_nights/stats.py` (run from the base folder, or pass the path to the
+  database) prints the cup leaderboard, cup history, per-track results, head-to-head records for races and cups, and
+  track records. Any SQLite browser can open the database. Its views `player_cup_summary`, `player_track_summary`,
+  `head_to_head_races`, `head_to_head_cups` and `track_records` hold the same tables. The schema is
+  `tools/special_nights/schema.sql`. The game holds the file open only while saving, so it can be read while the game
+  runs. Back it up: it is your group's history.
 
 ## Debug Quick Start
 

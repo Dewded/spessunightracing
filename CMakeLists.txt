@@ -82,6 +82,34 @@ set(SDL_X11_XSCRNSAVER OFF CACHE BOOL "" FORCE)
 set(SDL_X11_XTEST OFF CACHE BOOL "" FORCE)
 add_subdirectory(externals/SDL)
 
+# SQLite (Special Nights stats database)
+add_library(ctr_sqlite STATIC externals/sqlite/sqlite3.c)
+target_include_directories(ctr_sqlite PUBLIC ${CMAKE_SOURCE_DIR}/externals/sqlite)
+target_compile_definitions(ctr_sqlite PRIVATE
+    SQLITE_THREADSAFE=0
+    SQLITE_OMIT_LOAD_EXTENSION
+    SQLITE_OMIT_DEPRECATED
+    SQLITE_DEFAULT_MEMSTATUS=0
+    SQLITE_DQS=0
+)
+if(CTR_NATIVE_MSVC_FRONTEND)
+    target_compile_options(ctr_sqlite PRIVATE /w)
+else()
+    target_compile_options(ctr_sqlite PRIVATE -w $<$<CONFIG:Release>:-O2>)
+endif()
+
+# The stats schema lives in one .sql file; embed it as a C string for the game.
+set(CTR_SPECIAL_NIGHTS_SCHEMA ${CMAKE_SOURCE_DIR}/tools/special_nights/schema.sql)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${CTR_SPECIAL_NIGHTS_SCHEMA})
+file(READ ${CTR_SPECIAL_NIGHTS_SCHEMA} CTR_SPECIAL_NIGHTS_SCHEMA_SQL)
+string(REPLACE "\\" "\\\\" CTR_SPECIAL_NIGHTS_SCHEMA_SQL "${CTR_SPECIAL_NIGHTS_SCHEMA_SQL}")
+string(REPLACE "\"" "\\\"" CTR_SPECIAL_NIGHTS_SCHEMA_SQL "${CTR_SPECIAL_NIGHTS_SCHEMA_SQL}")
+string(REPLACE "\r" "" CTR_SPECIAL_NIGHTS_SCHEMA_SQL "${CTR_SPECIAL_NIGHTS_SCHEMA_SQL}")
+string(REPLACE "\n" "\\n\"\n    \"" CTR_SPECIAL_NIGHTS_SCHEMA_SQL "${CTR_SPECIAL_NIGHTS_SCHEMA_SQL}")
+file(WRITE ${CMAKE_BINARY_DIR}/generated/special_nights_schema.h
+    "// Generated from tools/special_nights/schema.sql by CMake. Do not edit.\n"
+    "static const char SPECIAL_NIGHTS_SCHEMA_SQL[] =\n    \"${CTR_SPECIAL_NIGHTS_SCHEMA_SQL}\";\n")
+
 # CTR Native
 add_executable(ctr_native main.c)
 set_target_properties(ctr_native PROPERTIES
@@ -90,7 +118,7 @@ set_target_properties(ctr_native PROPERTIES
     C_EXTENSIONS OFF
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
 )
-target_include_directories(ctr_native PRIVATE ${CMAKE_SOURCE_DIR}/include)
+target_include_directories(ctr_native PRIVATE ${CMAKE_SOURCE_DIR}/include ${CMAKE_BINARY_DIR}/generated)
 target_compile_definitions(ctr_native PRIVATE
     CTR_NATIVE
     CTR_INTERNAL
@@ -127,7 +155,7 @@ else()
         ctr_native_add_label_warning_if_supported(ctr_native -Wc23-extensions CTR_HAS_WC23_EXTENSIONS)
     endif()
 endif()
-target_link_libraries(ctr_native SDL3::SDL3)
+target_link_libraries(ctr_native SDL3::SDL3 ctr_sqlite)
 if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
     target_link_options(ctr_native PRIVATE -static-libgcc)
 endif()
