@@ -210,8 +210,9 @@ internal void Platform_HandleKey(int key, char down)
 			NativeReplayScheduler_RequestStop();
 			break;
 		case SDL_SCANCODE_F7:
-			Platform_LogWarn("[CTR Native] saving VRAM.TGA\n");
+			Platform_LogWarn("[CTR Native] saving VRAM.TGA and logging the next frame's textured polygons\n");
 			NativeRenderer_SaveVRAM("VRAM.TGA", 0, 0, VRAM_WIDTH, VRAM_HEIGHT, 1);
+			NativeGpu_RequestPolyTrace();
 			break;
 		case SDL_SCANCODE_F12:
 			Platform_LogWarn("[CTR Native] Saving screenshot...\n");
@@ -385,6 +386,7 @@ void Platform_EndFrame(void)
 {
 	NativePerf_BeginScope(NATIVE_PERF_BUCKET_PLATFORM_END_FRAME);
 	Platform_EndScene();
+	NativeGpu_PolyTraceEndFrame();
 	Platform_CalcFPS();
 	NativePerf_EndScope(NATIVE_PERF_BUCKET_PLATFORM_END_FRAME);
 }

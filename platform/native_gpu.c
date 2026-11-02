@@ -207,6 +207,54 @@ int NativeGpu_RestoreState(const void *src, int srcSize)
 // offscreen VRAM target. CTR's DecalMP impostors keep dfe set while rendering
 // into texture VRAM right of the display page; on PS1 that simply writes VRAM,
 // so treat any draw area entirely right of the display as offscreen.
+// 0 off, 1 armed (starts with the next frame), 2 tracing this frame.
+global_variable int s_gpuPolyTrace;
+global_variable int s_gpuPolyTraceCount;
+
+void NativeGpu_RequestPolyTrace(void)
+{
+	s_gpuPolyTrace = 1;
+}
+
+void NativeGpu_PolyTraceEndFrame(void)
+{
+	if (s_gpuPolyTrace == 1)
+	{
+		s_gpuPolyTrace = 2;
+		s_gpuPolyTraceCount = 0;
+		Platform_Log("[CTR POLY] begin: kind tpage(x,y,bpp) clut(x,y) uv0..uv3 xy0..xy3\n");
+	}
+	else if (s_gpuPolyTrace == 2)
+	{
+		s_gpuPolyTrace = 0;
+		Platform_Log("[CTR POLY] end: %d textured polygons\n", s_gpuPolyTraceCount);
+	}
+}
+
+// Vertex/UV pointers follow the packet layout (x,y halfwords; u,v bytes).
+internal void NativeGpu_TraceTexturedPoly(const char *kind, int count, u16 tpage, u16 clut, u8 *uv0, u8 *uv1, u8 *uv2, u8 *uv3, short *xy0,
+                                          short *xy1, short *xy2, short *xy3)
+{
+	if (s_gpuPolyTrace != 2)
+	{
+		return;
+	}
+
+	s_gpuPolyTraceCount++;
+	if (count == 3)
+	{
+		Platform_Log("[CTR POLY] %s tpage=(%d,%d,%d) clut=(%d,%d) uv=(%d,%d)(%d,%d)(%d,%d) xy=(%d,%d)(%d,%d)(%d,%d)\n", kind, (tpage & 0xF) * 64,
+		             ((tpage >> 4) & 1) * 256, (tpage >> 7) & 3, (clut & 0x3F) * 16, (clut >> 6) & 0x1FF, uv0[0], uv0[1], uv1[0], uv1[1], uv2[0],
+		             uv2[1], xy0[0], xy0[1], xy1[0], xy1[1], xy2[0], xy2[1]);
+	}
+	else
+	{
+		Platform_Log("[CTR POLY] %s tpage=(%d,%d,%d) clut=(%d,%d) uv=(%d,%d)(%d,%d)(%d,%d)(%d,%d) xy=(%d,%d)(%d,%d)(%d,%d)(%d,%d)\n", kind,
+		             (tpage & 0xF) * 64, ((tpage >> 4) & 1) * 256, (tpage >> 7) & 3, (clut & 0x3F) * 16, (clut >> 6) & 0x1FF, uv0[0], uv0[1], uv1[0],
+		             uv1[1], uv2[0], uv2[1], uv3[0], uv3[1], xy0[0], xy0[1], xy1[0], xy1[1], xy2[0], xy2[1], xy3[0], xy3[1]);
+	}
+}
+
 internal bool NativeGpu_DrawEnvIsOnScreen(const DRAWENV *drawEnv, const DISPENV *dispEnv)
 {
 	if (!drawEnv->dfe)
@@ -1421,6 +1469,7 @@ internal int ProcessFlatPoly(P_TAG *polyTag)
 			MakeTexcoordTriangle(firstVertex, &poly->u0, &poly->u1, &poly->u2, poly->tpage, poly->clut,
 			                     GET_TPAGE_DITHER(activeDrawEnv.tpage) || activeDrawEnv.dtd);
 			MakeColourTriangle(firstVertex, shadeTexOn, &poly->r0, &poly->r0, &poly->r0);
+			NativeGpu_TraceTexturedPoly("FT3", 3, poly->tpage, poly->clut, &poly->u0, &poly->u1, &poly->u2, NULL, &poly->x0, &poly->x1, &poly->x2, NULL);
 
 			s_gpu.vertexIndex += 3;
 		}
@@ -1454,6 +1503,8 @@ internal int ProcessFlatPoly(P_TAG *polyTag)
 		MakeTexcoordQuad(firstVertex, &poly->u0, &poly->u1, &poly->u3, &poly->u2, poly->tpage, poly->clut,
 		                 GET_TPAGE_DITHER(activeDrawEnv.tpage) || activeDrawEnv.dtd);
 		MakeColourQuad(firstVertex, shadeTexOn, &poly->r0, &poly->r0, &poly->r0, &poly->r0);
+		NativeGpu_TraceTexturedPoly("FT4", 4, poly->tpage, poly->clut, &poly->u0, &poly->u1, &poly->u2, &poly->u3, &poly->x0, &poly->x1, &poly->x2,
+		                            &poly->x3);
 
 		TriangulateQuad();
 
@@ -1499,6 +1550,7 @@ internal int ProcessGouraudPoly(P_TAG *polyTag)
 		MakeVertexTriangle(firstVertex, &poly->x0, &poly->x1, &poly->x2);
 		MakeTexcoordTriangle(firstVertex, &poly->u0, &poly->u1, &poly->u2, poly->tpage, poly->clut, GET_TPAGE_DITHER(activeDrawEnv.tpage) || activeDrawEnv.dtd);
 		MakeColourTriangle(firstVertex, shadeTexOn, &poly->r0, &poly->r1, &poly->r2);
+		NativeGpu_TraceTexturedPoly("GT3", 3, poly->tpage, poly->clut, &poly->u0, &poly->u1, &poly->u2, NULL, &poly->x0, &poly->x1, &poly->x2, NULL);
 
 		s_gpu.vertexIndex += 3;
 
@@ -1533,6 +1585,8 @@ internal int ProcessGouraudPoly(P_TAG *polyTag)
 		MakeTexcoordQuad(firstVertex, &poly->u0, &poly->u1, &poly->u3, &poly->u2, poly->tpage, poly->clut,
 		                 GET_TPAGE_DITHER(activeDrawEnv.tpage) || activeDrawEnv.dtd);
 		MakeColourQuad(firstVertex, shadeTexOn, &poly->r0, &poly->r1, &poly->r3, &poly->r2);
+		NativeGpu_TraceTexturedPoly("GT4", 4, poly->tpage, poly->clut, &poly->u0, &poly->u1, &poly->u2, &poly->u3, &poly->x0, &poly->x1, &poly->x2,
+		                            &poly->x3);
 
 		TriangulateQuad();
 

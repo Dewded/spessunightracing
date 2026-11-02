@@ -22,5 +22,8 @@ void ParsePrimitivesLinkedList(u32 *p, int singlePrimitive);
 int NativeGpu_GetStateSize(void);
 int NativeGpu_CaptureState(void *dst, int dstSize);
 int NativeGpu_RestoreState(const void *src, int srcSize);
+// Logs every textured polygon of the next frame (tpage, CLUT, UVs, screen XY).
+void NativeGpu_RequestPolyTrace(void);
+void NativeGpu_PolyTraceEndFrame(void);
 
 #endif
