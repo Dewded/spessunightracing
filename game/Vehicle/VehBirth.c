@@ -597,6 +597,13 @@ struct Model *VehBirth_GetModelByName(char *searchName)
 
 	m = NULL;
 	i = (s32)(size_t)m;
+#if defined(CTR_NATIVE)
+	// Special Nights: karts prepared for this race (extra AI, high detail) come first.
+	if ((extraModel = SpecialNights_FindRaceModel(searchName)) != NULL)
+	{
+		return extraModel;
+	}
+#endif
 	// array to character models loaded,
 	// maximum of 4, used in VS mode
 	for (; i < VEH_EXTRA_DRIVER_MODEL_COUNT; i++)

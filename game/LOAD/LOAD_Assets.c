@@ -96,6 +96,11 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 	int gameMode1;
 	struct GameTracker *gGT;
 
+#if defined(CTR_NATIVE)
+	// Special Nights: 3P/4P Arcade has AI racers; pick them before slot 3 chooses a pack.
+	SpecialNights_AssignAiBeforePacks(levelLOD);
+#endif
+
 	// 3P/4P
 	if ((u32)(levelLOD - LOAD_LEVEL_LOD_3P) < LOAD_LEVEL_LOD_3P4P_COUNT)
 	{
@@ -195,6 +200,10 @@ CheckHighAndPack:
 		LOAD_AppendQueue(bigfile, LT_GETADDR, BI_RACERMODELMED + GAME_CHARACTER_IDS[1], &GAME_DRIVER_MODEL_EXTRAS[1].fileBase, LOAD_DriverMPK_SetPointer);
 
 		LOAD_Robots2P(bigfile, GAME_CHARACTER_IDS[0], GAME_CHARACTER_IDS[1], callback);
+#if defined(CTR_NATIVE)
+		// Special Nights: two more AI racers beyond the pack's four.
+		SpecialNights_AssignAiAfterPacks(levelLOD);
+#endif
 		return sdata->ptrMPK;
 	}
 }

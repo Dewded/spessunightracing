@@ -13,6 +13,7 @@ global_variable b32 s_displayWidescreen = true;
 global_variable b32 s_displayFullscreen = false;
 // Diagnostic: keep the 16:9 host frame but leave game viewports at 4:3.
 global_variable b32 s_displayKeepGameViewports = false;
+global_variable b32 s_displayRetailKarts = false;
 global_variable s32 s_displayRenderScale = 0;
 
 internal const char *NativeDisplay_ArgValue(int argc, char **argv, const char *name)
@@ -55,6 +56,11 @@ int NativeDisplay_ConfigureFromArgs(int argc, char **argv)
 		s_displayWidescreen = true;
 	}
 
+	if (NativeDisplay_ArgPresent(argc, argv, "--retail-karts"))
+	{
+		s_displayRetailKarts = true;
+	}
+
 	if (NativeDisplay_ArgPresent(argc, argv, "--widescreen-host-only"))
 	{
 		s_displayKeepGameViewports = true;
@@ -80,6 +86,11 @@ int NativeDisplay_ConfigureFromArgs(int argc, char **argv)
 	}
 
 	return 0;
+}
+
+b32 NativeDisplay_RetailKarts(void)
+{
+	return s_displayRetailKarts;
 }
 
 b32 NativeDisplay_IsWidescreen(void)

@@ -1,5 +1,14 @@
 #include <common.h>
 
+// Multiplayer draws distant karts as sprites rendered into VRAM (DecalMP).
+// Native draws every kart as a mesh in every view instead (Special Nights:
+// detail at any distance, and room for 8 racers in 4P).
+#if defined(CTR_NATIVE)
+#define MAINFRAME_USE_KART_SPRITES(gGT) (0 && (gGT))
+#else
+#define MAINFRAME_USE_KART_SPRITES(gGT) ((((gGT)->renderFlags & RENDER_FLAG_MULTIPLAYER_DECALS) != 0) && ((gGT)->numPlyrCurrGame > 1))
+#endif
+
 #if defined(CTR_NATIVE) && defined(CTR_INTERNAL)
 #include <platform/native_perf.h>
 #define MAINFRAME_PERF_BEGIN(bucket) NativePerf_BeginScope(bucket)
@@ -72,7 +81,7 @@ void MainFrame_RenderFrame(struct GameTracker *gGT, struct GamepadSystem *gGamep
 		RenderStars(&gGT->pushBuffer[0], &gGT->backBuffer->primMem, &gGT->stars, gGT->numPlyrCurrGame);
 	}
 
-	if (((gGT->renderFlags & RENDER_FLAG_MULTIPLAYER_DECALS) != 0) && (gGT->numPlyrCurrGame > 1))
+	if (MAINFRAME_USE_KART_SPRITES(gGT))
 	{
 		DecalMP_01(gGT);
 	}
@@ -97,7 +106,7 @@ void MainFrame_RenderFrame(struct GameTracker *gGT, struct GamepadSystem *gGamep
 
 	RenderDispEnv_World(gGT); // == RenderDispEnv_World ==
 
-	if (((gGT->renderFlags & RENDER_FLAG_MULTIPLAYER_DECALS) != 0) && (gGT->numPlyrCurrGame > 1))
+	if (MAINFRAME_USE_KART_SPRITES(gGT))
 	{
 		DecalMP_02(gGT);
 	}
@@ -139,7 +148,7 @@ void MainFrame_RenderFrame(struct GameTracker *gGT, struct GamepadSystem *gGamep
 			UI_RenderFrame_Wumpa3D_2P3P4P(gGT);
 		}
 
-		if (((gGT->renderFlags & RENDER_FLAG_MULTIPLAYER_DECALS) != 0) && (gGT->numPlyrCurrGame > 1))
+		if (MAINFRAME_USE_KART_SPRITES(gGT))
 		{
 			DecalMP_03(gGT);
 		}

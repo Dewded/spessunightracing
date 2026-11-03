@@ -178,12 +178,20 @@ picture at the left and right edges, while the HUD, menus and videos keep their 
 | `--fullscreen` | Start in fullscreen (`F11` or `Alt+Enter` toggles at any time) |
 | `--4x3` | Original 4:3 picture |
 | `--scale N` | Render at N× PS1 resolution (`1`–`8`); `0` (default) picks the smallest scale that fills the window height |
+| `--retail-karts` | Retail's per-player-count kart models in 2P-4P instead of high detail for all |
 
 `--scale 1 --4x3` reproduces the original presentation.
 
 ## Special Nights Mods
 
-- Every character is unlocked at character select.
+- Every character is unlocked at character select, and every Arcade difficulty (Easy, Medium, Hard) is open.
+- **Arcade for 1-4 players with 8 racers:** Arcade's player menu offers 1P-4P, and AI racers always fill the grid to
+  8. Retail Arcade had 1P (8 racers) and 2P (6 racers) only. VS and Battle stay humans only. Each player needs a
+  connected controller, and the keyboard counts as one: **F4** moves the keyboard to the next player slot, **F6**
+  cycles gamepads. With three or four inputs connected, the game automatically emulates the PS1 multitap.
+- **Detailed karts at any distance:** multiplayer no longer swaps distant karts for sprites. In races and battles
+  every racer uses its high-detail (1P) model. `--retail-karts` keeps retail's lower-detail models for 2P-4P (for
+  example if their textures look wrong).
 - The red ribbon under the title logo reads **SPESSU NIGHT**. The game rebuilds it each time the main menu loads, from
   the ribbon's own original letters (P is made from R and U from H). Nothing changes unless the ribbon is the
   untouched NTSC-U original.

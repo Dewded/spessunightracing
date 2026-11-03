@@ -263,6 +263,7 @@
 #include "SpecialNights.c"
 #include "SpecialNightsStats.c"
 #include "SpecialNightsRibbon.c"
+#include "SpecialNightsRacers.c"
 
 #include "230.c"
 

@@ -141,6 +141,23 @@ static int MainInit_GetPrimMemSize(struct GameTracker *gGT)
 	}
 }
 
+#if defined(CTR_NATIVE)
+// Special Nights: 8 high-detail karts in up to four views need far more
+// primitive space than retail's per-level budgets, so both draw buffers use
+// host memory instead of the PS1-sized mempack.
+#define MAIN_INIT_NATIVE_PRIM_MEM_BYTES 0x200000
+
+internal void MainInit_NativePrimMem(struct PrimMem *primMem, u8 *arena)
+{
+	primMem->capacityBytes = MAIN_INIT_NATIVE_PRIM_MEM_BYTES;
+	primMem->allocationStart = arena;
+	primMem->cursor = arena;
+	primMem->start = arena;
+	primMem->end = arena + MAIN_INIT_NATIVE_PRIM_MEM_BYTES;
+	primMem->guardEnd = (u8 *)primMem->end - 0x100;
+}
+#endif
+
 void MainInit_PrimMem(struct GameTracker *gGT)
 {
 	int size = MainInit_GetPrimMemSize(gGT);
@@ -150,8 +167,14 @@ void MainInit_PrimMem(struct GameTracker *gGT)
 		return;
 	}
 
+#if defined(CTR_NATIVE)
+	static u32 s_primArena[2][MAIN_INIT_NATIVE_PRIM_MEM_BYTES / sizeof(u32)];
+	MainInit_NativePrimMem(&gGT->db[0].primMem, (u8 *)s_primArena[0]);
+	MainInit_NativePrimMem(&gGT->db[1].primMem, (u8 *)s_primArena[1]);
+#else
 	MainDB_PrimMem(&gGT->db[0].primMem, size);
 	MainDB_PrimMem(&gGT->db[1].primMem, size);
+#endif
 }
 
 void MainInit_JitPoolsReset(struct GameTracker *gGT)
@@ -306,6 +329,11 @@ void MainInit_Drivers(struct GameTracker *gGT)
 		RB_MinePool_Init();
 	}
 
+#if defined(CTR_NATIVE)
+	// Special Nights: extra AI karts and high-detail karts, read before anyone spawns.
+	SpecialNights_PrepareRaceModels(gGT);
+#endif
+
 	// Spawn all players,
 	// This MUST be in reverse order,
 	// because of threadBucket linked list order
@@ -321,7 +349,12 @@ void MainInit_Drivers(struct GameTracker *gGT)
 	        ((gameMode & 0x2c122020) == 0) &&
 
 	        // numPlyrCurrGame requires AIs
+#if defined(CTR_NATIVE)
+	        // Special Nights: Arcade has AI at every player count
+	        ((numPlyrCurrGame < 3) || SpecialNights_ArcadeFullGrid(gGT))) &&
+#else
 	        (numPlyrCurrGame < 3)) &&
+#endif
 	    (
 	        // in Arcade or Adventure
 	        (gameMode & (ARCADE_MODE | ADVENTURE_MODE)) != 0))
@@ -353,6 +386,13 @@ void MainInit_Drivers(struct GameTracker *gGT)
 		else // if (numPlyrCurrGame == 2)
 		{
 			numDrivers = 6;
+#if defined(CTR_NATIVE)
+			// Special Nights: a full 8-racer Arcade grid in 2P, 3P and 4P too.
+			if (SpecialNights_ArcadeFullGrid(gGT))
+			{
+				numDrivers = 8;
+			}
+#endif
 		}
 
 		// Spawn AIs

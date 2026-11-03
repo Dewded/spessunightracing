@@ -302,14 +302,33 @@ void MM_MenuProc_Main(struct RectMenu *menu)
 	}
 }
 
+#if defined(CTR_NATIVE)
+// Special Nights: Arcade offers 1-4 players (AI fill the grid to 8 racers).
+#define MM_ARCADE_PLAYER_ROWS 4
+global_variable struct MenuRow s_mmArcadePlayerRows[MM_ARCADE_PLAYER_ROWS + 1] = {
+    {LNG_1P, 0, 1, 0, 0},
+    {LNG_2P, 0, 2, 1, 1},
+    {LNG_3P, 1, 3, 2, 2},
+    {LNG_4P, 2, 3, 3, 3},
+    {RECTMENU_STRING_NONE},
+};
+#endif
+
 void MM_ToggleRows_PlayerCount(void)
 {
 	struct MenuRow *row;
 	s16 rowIndex;
 
+#if defined(CTR_NATIVE)
+	MM_MENU_PLAYERS_1P2P.rows = s_mmArcadePlayerRows;
+	for (rowIndex = 0; rowIndex < MM_ARCADE_PLAYER_ROWS; rowIndex++)
+	{
+		row = &s_mmArcadePlayerRows[rowIndex];
+#else
 	for (rowIndex = 0; rowIndex < MM_PLAYER_1P2P_SELECTABLE_ROWS; rowIndex++)
 	{
 		row = &MM_ROWS_PLAYERS_1P2P[rowIndex];
+#endif
 
 		// unlock row
 		row->stringIndex &= MENU_ROW_LNG_MASK;
@@ -356,12 +375,16 @@ void MM_MenuProc_1p2p(struct RectMenu *menu)
 	}
 
 	// if on row 0 or 1
+#if defined(CTR_NATIVE)
+	if (row >= MM_ARCADE_PLAYER_ROWS)
+#else
 	if (row >= MM_PLAYER_1P2P_SELECTABLE_ROWS)
+#endif
 	{
 		return;
 	}
 
-	// row 0 is 1P, row 1 is 2P
+	// row 0 is 1P, row 1 is 2P (native: up to row 3, 4P)
 	GAME_TRACKER->numPlyrNextGame = menu->rowSelected + 1;
 
 	// go to difficulty box
@@ -499,6 +522,10 @@ void MM_ToggleRows_Difficulty(void)
 		difficultyRow = (struct MenuRow *)((u32)(signedDifficultyIndex * sizeof(*difficultyRow)) + (u32)difficultyMenu->rows);
 		finalUnlockState = shouldCheckNextTrack;
 		isUnlocked = 0;
+#if defined(CTR_NATIVE)
+		// Special Nights: every Arcade difficulty is open from the start.
+		finalUnlockState = 1;
+#endif
 
 		if (
 		// if locked
