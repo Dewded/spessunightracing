@@ -3,13 +3,15 @@
 // Special Nights: the "SPESSU STATS" main menu screen (native builds only).
 //
 // Reads special_nights.db (see game/SpecialNightsStats.c) when the screen
-// opens and shows it as pages: cup leaderboard, recent cups, head to head,
-// best laps, top speeds, and one page per player. L1/R1 or left/right flip
+// opens and shows it as pages: cup leaderboard, a points race chart per year,
+// recent cups, head to head, best laps, top speeds, and one page per player.
+// L1/R1 or left/right flip
 // pages, up/down scroll, Triangle/Square returns to the main menu.
 
 #if defined(CTR_NATIVE)
 
-#define SN_SCREEN_MAX_PAGES   (5 + SPECIAL_NIGHTS_ROSTER_MAX)
+#define SN_SCREEN_MAX_CHARTS  8
+#define SN_SCREEN_MAX_PAGES   (5 + SN_SCREEN_MAX_CHARTS + SPECIAL_NIGHTS_ROSTER_MAX)
 #define SN_SCREEN_MAX_ROWS    32
 #define SN_SCREEN_MAX_COLS    6
 #define SN_SCREEN_CELL_BYTES  20
@@ -17,9 +19,34 @@
 #define SN_SCREEN_ROW_Y0      52
 #define SN_SCREEN_ROW_STEP    10
 
+// Year chart: each player's running cup points after each cup of the year.
+#define SN_CHART_MAX_CUPS    96
+#define SN_CHART_MAX_PLAYERS 12
+#define SN_CHART_X0          44
+#define SN_CHART_X1          296
+#define SN_CHART_Y0          50
+#define SN_CHART_Y1          176
+#define SN_CHART_LEGEND_X    304
+#define SN_CHART_TOTAL_X     504
+#define SN_SMALL_CHAR_W      13
+
+struct SpecialNightsChart
+{
+	char year[8];
+	s32 numCups;
+	s32 numPlayers;
+	s32 maxValue;
+	char names[SN_CHART_MAX_PLAYERS][SN_SCREEN_CELL_BYTES];
+	char totals[SN_CHART_MAX_PLAYERS][8];
+	s16 color[SN_CHART_MAX_PLAYERS];
+	s16 order[SN_CHART_MAX_PLAYERS];
+	s32 points[SN_CHART_MAX_PLAYERS][SN_CHART_MAX_CUPS + 1]; // [0] is the year's start (0)
+};
+
 struct SpecialNightsScreenPage
 {
 	char title[32];
+	s32 chart; // index into s_snCharts, or -1 for a table page
 	s32 numCols;
 	s16 colX[SN_SCREEN_MAX_COLS];
 	u16 colJustify[SN_SCREEN_MAX_COLS];
@@ -33,6 +60,14 @@ global_variable s32 s_snNumPages;
 global_variable s32 s_snPage;
 global_variable s32 s_snScroll;
 global_variable char s_snMessage[48];
+global_variable struct SpecialNightsChart s_snCharts[SN_SCREEN_MAX_CHARTS];
+global_variable s32 s_snNumCharts;
+
+// Line and legend colours (font colour styles), one per roster slot.
+global_variable const s16 s_snChartColors[SN_CHART_MAX_PLAYERS] = {
+    POLAR_CYAN, PAPU_YELLOW,  TINY_GREEN,       COCO_MAGENTA, ROO_ORANGE,        CRASH_BLUE,
+    PURA_VIOLET, CORTEX_RED, OXIDE_LIGHT_GREEN, PENTA_WHITE,  TROPY_LIGHT_BLUE, DINGODILE_OLIVE,
+};
 
 global_variable struct RectMenu s_snStatsMenu = {
     .stringIndexTitle = RECTMENU_STRING_NONE,
@@ -124,6 +159,7 @@ internal struct SpecialNightsScreenPage *SpecialNights_NewPage(const char *title
 
 	page = &s_snPages[s_snNumPages++];
 	memset(page, 0, sizeof(*page));
+	page->chart = -1;
 	SpecialNights_FoldDisplayName(title, page->title, sizeof(page->title));
 	return page;
 }
@@ -199,6 +235,141 @@ internal void SpecialNights_FillPage(sqlite3 *db, struct SpecialNightsScreenPage
 	sqlite3_finalize(stmt);
 }
 
+internal s32 SpecialNights_ChartColor(const char *player, s32 fallback)
+{
+	for (s32 i = 0; i < s_specialNightsRosterCount; i++)
+	{
+		if (strcmp(s_specialNightsRoster[i], player) == 0)
+		{
+			return s_snChartColors[i % SN_CHART_MAX_PLAYERS];
+		}
+	}
+	return s_snChartColors[fallback % SN_CHART_MAX_PLAYERS];
+}
+
+// One chart page per year, newest first: running cup points of every player.
+internal void SpecialNights_LoadYearCharts(sqlite3 *db)
+{
+	struct SpecialNightsChart *chart = NULL;
+	char rawNames[SN_CHART_MAX_PLAYERS][SPECIAL_NIGHTS_NAME_BYTES];
+	char year[8] = "";
+	char cupRun[32] = "";
+	sqlite3_stmt *stmt = NULL;
+	s32 chartFirst = s_snNumCharts;
+
+	if (sqlite3_prepare_v2(db,
+	                       "SELECT substr(c.started_at, 1, 4), c.cup_run, cr.player, cr.points FROM cup_results cr "
+	                       "JOIN cup_runs c ON c.cup_run = cr.cup_run WHERE c.completed = 1 AND cr.human = 1 "
+	                       "ORDER BY c.started_at, c.cup_run",
+	                       -1, &stmt, NULL) != SQLITE_OK)
+	{
+		SpecialNights_DbLogError(db, "year chart query");
+		return;
+	}
+
+	while (sqlite3_step(stmt) == SQLITE_ROW)
+	{
+		const char *rowYear = (const char *)sqlite3_column_text(stmt, 0);
+		const char *rowRun = (const char *)sqlite3_column_text(stmt, 1);
+		const char *player = (const char *)sqlite3_column_text(stmt, 2);
+		s32 playerIndex;
+
+		if ((rowYear == NULL) || (rowRun == NULL) || (player == NULL))
+		{
+			continue;
+		}
+
+		// New year: new chart (older years drop out once the chart slots run out).
+		if ((chart == NULL) || (strcmp(rowYear, year) != 0))
+		{
+			if (s_snNumCharts >= SN_SCREEN_MAX_CHARTS)
+			{
+				memmove(&s_snCharts[chartFirst], &s_snCharts[chartFirst + 1], (s_snNumCharts - chartFirst - 1) * sizeof(s_snCharts[0]));
+				s_snNumCharts--;
+			}
+			chart = &s_snCharts[s_snNumCharts++];
+			memset(chart, 0, sizeof(*chart));
+			snprintf(year, sizeof(year), "%s", rowYear);
+			snprintf(chart->year, sizeof(chart->year), "%s", year);
+			cupRun[0] = 0;
+		}
+
+		// New cup: every line carries its total forward.
+		if (strcmp(rowRun, cupRun) != 0)
+		{
+			if (chart->numCups >= SN_CHART_MAX_CUPS)
+			{
+				continue;
+			}
+			chart->numCups++;
+			for (s32 i = 0; i < chart->numPlayers; i++)
+			{
+				chart->points[i][chart->numCups] = chart->points[i][chart->numCups - 1];
+			}
+			snprintf(cupRun, sizeof(cupRun), "%s", rowRun);
+		}
+
+		for (playerIndex = 0; playerIndex < chart->numPlayers; playerIndex++)
+		{
+			if (strcmp(rawNames[playerIndex], player) == 0)
+			{
+				break;
+			}
+		}
+		if (playerIndex == chart->numPlayers)
+		{
+			if (chart->numPlayers >= SN_CHART_MAX_PLAYERS)
+			{
+				continue;
+			}
+			chart->numPlayers++;
+			snprintf(rawNames[playerIndex], sizeof(rawNames[playerIndex]), "%s", player);
+			SpecialNights_FoldDisplayName(player, chart->names[playerIndex], sizeof(chart->names[playerIndex]));
+			chart->color[playerIndex] = (s16)SpecialNights_ChartColor(player, playerIndex);
+		}
+		chart->points[playerIndex][chart->numCups] += sqlite3_column_int(stmt, 3);
+	}
+	sqlite3_finalize(stmt);
+
+	// Pages newest year first; legend sorted by the year's total.
+	for (s32 c = s_snNumCharts - 1; c >= chartFirst; c--)
+	{
+		struct SpecialNightsScreenPage *page;
+		char title[32];
+
+		chart = &s_snCharts[c];
+		snprintf(title, sizeof(title), "%s Points Race", chart->year);
+		page = SpecialNights_NewPage(title);
+		if (page == NULL)
+		{
+			break;
+		}
+		page->chart = c;
+
+		chart->maxValue = 1;
+		for (s32 i = 0; i < chart->numPlayers; i++)
+		{
+			const s32 total = chart->points[i][chart->numCups];
+
+			snprintf(chart->totals[i], sizeof(chart->totals[i]), "%d", total);
+			if (total > chart->maxValue)
+			{
+				chart->maxValue = total;
+			}
+			chart->order[i] = (s16)i;
+		}
+		for (s32 i = 1; i < chart->numPlayers; i++)
+		{
+			for (s32 j = i; (j > 0) && (chart->points[chart->order[j]][chart->numCups] > chart->points[chart->order[j - 1]][chart->numCups]); j--)
+			{
+				const s16 swap = chart->order[j];
+				chart->order[j] = chart->order[j - 1];
+				chart->order[j - 1] = swap;
+			}
+		}
+	}
+}
+
 internal void SpecialNights_LoadStatsPages(void)
 {
 	struct SpecialNightsScreenPage *page;
@@ -208,6 +379,7 @@ internal void SpecialNights_LoadStatsPages(void)
 	s32 numPlayers = 0;
 
 	s_snNumPages = 0;
+	s_snNumCharts = 0;
 	s_snMessage[0] = 0;
 
 	if (sqlite3_open_v2(SPECIAL_NIGHTS_DB_FILE, &db, SQLITE_OPEN_READONLY, NULL) != SQLITE_OK)
@@ -232,6 +404,8 @@ internal void SpecialNights_LoadStatsPages(void)
 		                       "ORDER BY cup_wins DESC, avg_final_place, total_points DESC",
 		                       NULL, 0);
 	}
+
+	SpecialNights_LoadYearCharts(db);
 
 	page = SpecialNights_NewPage("Recent Cups");
 	if (page != NULL)
@@ -317,6 +491,77 @@ internal void SpecialNights_LoadStatsPages(void)
 // ---------------------------------------------------------------------------
 // Screen
 
+internal void SpecialNights_ChartLine(s32 x0, s32 y0, s32 x1, s32 y1, u32 rgb, u32 *ot)
+{
+	struct PrimMem *primMem = &GAME_TRACKER->backBuffer->primMem;
+
+	// Two passes a pixel apart so lines stay visible at high render scales.
+	CTR_Box_DrawWirePrims((s16)x0, (s16)y0, (s16)x1, (s16)y1, rgb & 0xff, (rgb >> 8) & 0xff, (rgb >> 16) & 0xff, ot, primMem);
+	CTR_Box_DrawWirePrims((s16)x0, (s16)(y0 + 1), (s16)x1, (s16)(y1 + 1), rgb & 0xff, (rgb >> 8) & 0xff, (rgb >> 16) & 0xff, ot, primMem);
+}
+
+internal void SpecialNights_DrawChart(const struct SpecialNightsChart *chart, u32 *ot)
+{
+	char label[16];
+	const s32 width = SN_CHART_X1 - SN_CHART_X0;
+	const s32 height = SN_CHART_Y1 - SN_CHART_Y0;
+	const s32 cups = (chart->numCups > 0) ? chart->numCups : 1;
+
+	// Names get whatever the widest total leaves free.
+	s32 totalChars = 1;
+	for (s32 i = 0; i < chart->numPlayers; i++)
+	{
+		if ((s32)strlen(chart->totals[i]) > totalChars)
+		{
+			totalChars = (s32)strlen(chart->totals[i]);
+		}
+	}
+	const s32 nameChars = (SN_CHART_TOTAL_X - SN_CHART_LEGEND_X - totalChars * SN_SMALL_CHAR_W - 4) / SN_SMALL_CHAR_W;
+
+	// Text first: within one OT slot, later primitives are drawn underneath.
+	for (s32 i = 0; i < chart->numPlayers; i++)
+	{
+		const s32 p = chart->order[i];
+		const s32 y = SN_CHART_Y0 + i * SN_SCREEN_ROW_STEP;
+		char name[SN_SCREEN_CELL_BYTES];
+
+		snprintf(name, sizeof(name), "%.*s", (nameChars > 0) ? nameChars : 1, chart->names[p]);
+		DecalFont_DrawLine(name, SN_CHART_LEGEND_X, (s16)y, FONT_SMALL, chart->color[p]);
+		DecalFont_DrawLine((char *)chart->totals[p], SN_CHART_TOTAL_X, (s16)y, FONT_SMALL, JUSTIFY_RIGHT | WHITE);
+	}
+
+	snprintf(label, sizeof(label), "%d", chart->maxValue);
+	DecalFont_DrawLine(label, SN_CHART_X0 - 4, SN_CHART_Y0 - 4, FONT_SMALL, JUSTIFY_RIGHT | WHITE);
+	DecalFont_DrawLine("0", SN_CHART_X0 - 4, SN_CHART_Y1 - 4, FONT_SMALL, JUSTIFY_RIGHT | WHITE);
+	snprintf(label, sizeof(label), "%d CUPS", chart->numCups);
+	DecalFont_DrawLine(label, (SN_CHART_X0 + SN_CHART_X1) / 2, SN_CHART_Y1 + 4, FONT_SMALL, JUSTIFY_CENTER | PERIWINKLE);
+
+	// Player lines (each starts at 0 before the year's first cup).
+	for (s32 p = 0; p < chart->numPlayers; p++)
+	{
+		const u32 rgb = data.ptrColor[chart->color[p]][0];
+
+		for (s32 cup = 1; cup <= chart->numCups; cup++)
+		{
+			const s32 xa = SN_CHART_X0 + ((cup - 1) * width) / cups;
+			const s32 xb = SN_CHART_X0 + (cup * width) / cups;
+			const s32 ya = SN_CHART_Y1 - (chart->points[p][cup - 1] * height) / chart->maxValue;
+			const s32 yb = SN_CHART_Y1 - (chart->points[p][cup] * height) / chart->maxValue;
+
+			SpecialNights_ChartLine(xa, ya, xb, yb, rgb, ot);
+		}
+	}
+
+	// Axes and quarter gridlines behind the lines.
+	for (s32 q = 1; q < 4; q++)
+	{
+		const s32 y = SN_CHART_Y1 - (q * height) / 4;
+		CTR_Box_DrawWirePrims(SN_CHART_X0, (s16)y, SN_CHART_X1, (s16)y, 70, 70, 90, ot, &GAME_TRACKER->backBuffer->primMem);
+	}
+	CTR_Box_DrawWirePrims(SN_CHART_X0, SN_CHART_Y1, SN_CHART_X1, SN_CHART_Y1, 200, 200, 200, ot, &GAME_TRACKER->backBuffer->primMem);
+	CTR_Box_DrawWirePrims(SN_CHART_X0, SN_CHART_Y0, SN_CHART_X0, SN_CHART_Y1, 200, 200, 200, ot, &GAME_TRACKER->backBuffer->primMem);
+}
+
 void MM_SpecialNightsStats_Init(void)
 {
 	s_snPage = 0;
@@ -375,6 +620,13 @@ void MM_SpecialNightsStats_MenuProc(struct RectMenu *menu)
 	{
 		DecalFont_DrawLine((s_snMessage[0] != 0) ? s_snMessage : "NO CUPS RECORDED YET", 256, 100, FONT_SMALL, JUSTIFY_CENTER | WHITE);
 		DecalFont_DrawLine("TRIANGLE BACK", 256, 194, FONT_SMALL, JUSTIFY_CENTER | ORANGE);
+	}
+	else if (page->chart >= 0)
+	{
+		DecalFont_DrawLine(page->title, 256, 34, FONT_SMALL, JUSTIFY_CENTER | WHITE);
+		SpecialNights_DrawChart(&s_snCharts[page->chart], ot);
+		snprintf(footer, sizeof(footer), "L1/R1 PAGE %d/%d  TRIANGLE BACK", s_snPage + 1, s_snNumPages);
+		DecalFont_DrawLine(footer, 256, 194, FONT_SMALL, JUSTIFY_CENTER | ORANGE);
 	}
 	else
 	{

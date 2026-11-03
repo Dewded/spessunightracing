@@ -209,6 +209,7 @@ Arcade and VS cups are recorded for the stats tables when every human player has
 - **Only finished, confirmed cups count:** if anyone has no name when the first race finishes, nothing in that cup is
   written. If a cup is quit early, its races stay in the database but every view and report skips them.
 - **In the game:** the main menu has a **SPESSU STATS** entry under HIGH SCORE. Its pages are the cup leaderboard,
+  a **points race chart for each year** (every player's running cup points, cup by cup, one coloured line each),
   recent cups, head to head (races and cups), best laps, top speeds and one page per player. Switch pages with
   **L1/R1** or **left/right**, scroll long pages with **up/down**, and press **Triangle** to go back.
 - **Looking at the data:** `python tools/special_nights/stats.py` (run from the base folder, or pass the path to the
