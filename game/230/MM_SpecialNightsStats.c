@@ -237,6 +237,11 @@ internal void SpecialNights_FillPage(sqlite3 *db, struct SpecialNightsScreenPage
 
 internal s32 SpecialNights_ChartColor(const char *player, s32 fallback)
 {
+	// The AI racers, counted as one competitor by the stats views.
+	if (strcmp(player, "AI") == 0)
+	{
+		return RED;
+	}
 	for (s32 i = 0; i < s_specialNightsRosterCount; i++)
 	{
 		if (strcmp(s_specialNightsRoster[i], player) == 0)

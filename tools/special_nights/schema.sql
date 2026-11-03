@@ -73,7 +73,7 @@ CREATE TABLE IF NOT EXISTS cup_results (
     PRIMARY KEY (cup_run, slot)
 );
 
--- Points for a cup by finishing place among the human players (AI ignored).
+-- Points for a cup by overall finishing place (AI racers included).
 -- Edit the rows to change the scoring; places without a row score 0.
 CREATE TABLE IF NOT EXISTS placement_points (
     place INTEGER PRIMARY KEY,
@@ -85,6 +85,7 @@ INSERT OR IGNORE INTO placement_points (place, points) VALUES (1, 10), (2, 6), (
 
 DROP VIEW IF EXISTS counted_race_results;
 DROP VIEW IF EXISTS counted_cup_results;
+DROP VIEW IF EXISTS counted_race_places;
 DROP VIEW IF EXISTS counted_player_cup_places;
 DROP VIEW IF EXISTS player_cup_summary;
 DROP VIEW IF EXISTS player_track_summary;
@@ -106,17 +107,37 @@ FROM cup_results cr
 JOIN cup_runs c ON c.cup_run = cr.cup_run
 WHERE c.completed = 1;
 
--- Each human's finishing place among the humans of a cup, and the points it scores.
+-- The AI racers count as one competitor, "AI": in each race and cup it takes
+-- the result of its best-placed racer. Places are overall (1-8).
+
+-- One row per competitor (each human, plus AI) per race.
+CREATE VIEW IF NOT EXISTS counted_race_places AS
+SELECT race_id, cup_run, track_index, level_id, track_name, recorded_at, mode, cup_name, difficulty,
+       human, player, character, place, points, finished, race_time_ms, best_lap_ms, turbo_ms, avg_speed, top_speed, turbos
+FROM counted_race_results
+WHERE human = 1
+UNION ALL
+SELECT race_id, cup_run, track_index, level_id, track_name, recorded_at, mode, cup_name, difficulty,
+       0, 'AI', character, place, points, finished, race_time_ms, best_lap_ms, turbo_ms, avg_speed, top_speed, turbos
+FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY race_id ORDER BY place) AS ai_rank
+      FROM counted_race_results WHERE human = 0)
+WHERE ai_rank = 1;
+
+-- One row per competitor (each human, plus AI) per cup, with the points its place scores.
 CREATE VIEW IF NOT EXISTS counted_player_cup_places AS
 SELECT ranked.*, COALESCE(pp.points, 0) AS place_points
-FROM (SELECT cup_run, started_at, player, final_place, points AS cup_points,
-             RANK() OVER (PARTITION BY cup_run ORDER BY final_place) AS player_place
+FROM (SELECT cup_run, started_at, human, player, character, final_place AS player_place, points AS cup_points
       FROM counted_cup_results
-      WHERE human = 1) ranked
+      WHERE human = 1
+      UNION ALL
+      SELECT cup_run, started_at, 0, 'AI', character, final_place, points
+      FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY cup_run ORDER BY final_place) AS ai_rank
+            FROM counted_cup_results WHERE human = 0)
+      WHERE ai_rank = 1) ranked
 LEFT JOIN placement_points pp ON pp.place = ranked.player_place;
 
--- Wins, podiums and average place count among the humans; total_points are
--- placement points, cup_points the game's own cup score.
+-- Wins, podiums and average place are overall places; total_points are
+-- placement points, total_cup_points the game's own cup score.
 CREATE VIEW IF NOT EXISTS player_cup_summary AS
 SELECT player,
        COUNT(*) AS cups,
@@ -141,29 +162,26 @@ SELECT player, level_id, track_name,
        MAX(top_speed) AS top_speed,
        ROUND(AVG(avg_speed)) AS avg_speed,
        ROUND(AVG(turbo_ms)) AS avg_turbo_ms
-FROM counted_race_results
-WHERE human = 1
+FROM counted_race_places
 GROUP BY player, level_id;
 
--- One row per (player, opponent) pair of humans who raced each other.
+-- One row per (player, opponent) pair of competitors (AI included) who raced each other.
 CREATE VIEW IF NOT EXISTS head_to_head_races AS
 SELECT a.player AS player, b.player AS opponent,
        COUNT(*) AS races,
        SUM(a.place < b.place) AS ahead,
        SUM(a.place > b.place) AS behind
-FROM counted_race_results a
-JOIN counted_race_results b ON b.race_id = a.race_id AND b.slot <> a.slot
-WHERE a.human = 1 AND b.human = 1
+FROM counted_race_places a
+JOIN counted_race_places b ON b.race_id = a.race_id AND b.player <> a.player
 GROUP BY a.player, b.player;
 
 CREATE VIEW IF NOT EXISTS head_to_head_cups AS
 SELECT a.player AS player, b.player AS opponent,
        COUNT(*) AS cups,
-       SUM(a.final_place < b.final_place) AS ahead,
-       SUM(a.final_place > b.final_place) AS behind
-FROM counted_cup_results a
-JOIN counted_cup_results b ON b.cup_run = a.cup_run AND b.slot <> a.slot
-WHERE a.human = 1 AND b.human = 1
+       SUM(a.player_place < b.player_place) AS ahead,
+       SUM(a.player_place > b.player_place) AS behind
+FROM counted_player_cup_places a
+JOIN counted_player_cup_places b ON b.cup_run = a.cup_run AND b.player <> a.player
 GROUP BY a.player, b.player;
 
 CREATE VIEW IF NOT EXISTS track_records AS
@@ -179,4 +197,4 @@ SELECT level_id, track_name,
 FROM counted_race_results t
 GROUP BY level_id;
 
-PRAGMA user_version = 2;
+PRAGMA user_version = 3;

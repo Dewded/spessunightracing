@@ -68,7 +68,7 @@ def report(db: sqlite3.Connection) -> str:
 
     sections.append(
         _table(
-            "Cup leaderboard (places among players; points from placement_points)",
+            "Cup leaderboard (overall places, AI racers as one; points from placement_points)",
             ["Player", "Cups", "Wins", "Podiums", "Avg place", "Points", "Avg points", "Cup points"],
             db.execute(
                 """SELECT player, cups, cup_wins, cup_podiums, avg_final_place, total_points, avg_points, total_cup_points

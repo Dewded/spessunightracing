@@ -87,7 +87,7 @@ class SpecialNightsStatsTest(unittest.TestCase):
     def test_schema_can_be_rerun(self):
         # The game runs the schema on every open.
         self.game.db.executescript(stats.SCHEMA_PATH.read_text(encoding="utf-8"))
-        self.assertEqual(self.game.db.execute("PRAGMA user_version").fetchone()[0], 2)
+        self.assertEqual(self.game.db.execute("PRAGMA user_version").fetchone()[0], 3)
 
     def test_only_completed_cups_count(self):
         g = self.game
@@ -106,12 +106,17 @@ class SpecialNightsStatsTest(unittest.TestCase):
             row[0]: row[1:]
             for row in db.execute("SELECT player, cups, cup_wins, avg_final_place, total_points, total_cup_points FROM player_cup_summary")
         }
-        self.assertEqual(summary["Zamiza"], (1, 1, 1.0, 10, 38))  # 1st among players: 10 placement points
+        self.assertEqual(summary["Zamiza"], (1, 1, 1.0, 10, 38))  # 1st: 10 placement points
         self.assertEqual(summary["Fröttis"], (1, 0, 2.0, 6, 32))
+        self.assertEqual(summary["AI"], (1, 0, 3.0, 3, 20))  # best AI racer was 3rd
 
         h2h = {(p, o): (n, a, b) for p, o, n, a, b in db.execute("SELECT * FROM head_to_head_races")}
         self.assertEqual(h2h[("Zamiza", "Fröttis")], (4, 3, 1))
         self.assertEqual(h2h[("Fröttis", "Zamiza")], (4, 1, 3))
+        # AI's best racer per race: 3rd, 3rd, 2nd, 3rd.
+        self.assertEqual(h2h[("Zamiza", "AI")], (4, 4, 0))
+        self.assertEqual(h2h[("Fröttis", "AI")], (4, 3, 1))
+        self.assertEqual(h2h[("AI", "Fröttis")], (4, 1, 3))
 
         cove = db.execute("SELECT races, wins, best_lap_ms FROM player_track_summary WHERE player = 'Fröttis' AND level_id = 3").fetchone()
         self.assertEqual(cove, (1, 0, 39000))  # run-2's Crash Cove win does not count
@@ -122,14 +127,16 @@ class SpecialNightsStatsTest(unittest.TestCase):
         self.assertEqual(db.execute("SELECT COUNT(*) FROM races").fetchone()[0], 5)  # opening never touches data
         db.close()
 
-    def test_places_count_among_players_only(self):
-        # Arcade cup: AI racers finish 1st and 3rd, the players 2nd and 4th overall.
+    def test_places_are_overall_with_ai_as_one_competitor(self):
+        # Arcade cup: AI racers finish 1st and 3rd, the players 2nd and 4th.
         self.game.cup_end("run-1", [(AI_A, 40), (FROTTIS, 30), (AI_B, 20), (ZAMIZA, 10)])
         db = stats.open_database(self.path)
         places = dict(db.execute("SELECT player, player_place FROM counted_player_cup_places").fetchall())
-        self.assertEqual(places, {"Fröttis": 1, "Zamiza": 2})
+        self.assertEqual(places, {"Fröttis": 2, "Zamiza": 4, "AI": 1})
         summary = dict(db.execute("SELECT player, total_points FROM player_cup_summary").fetchall())
-        self.assertEqual(summary, {"Fröttis": 10, "Zamiza": 6})
+        self.assertEqual(summary, {"Fröttis": 6, "Zamiza": 1, "AI": 10})
+        cups = {(p, o): (a, b) for p, o, _, a, b in db.execute("SELECT * FROM head_to_head_cups")}
+        self.assertEqual(cups[("AI", "Fröttis")], (1, 0))
         db.close()
 
     def test_placement_points_are_editable(self):
@@ -151,7 +158,7 @@ class SpecialNightsStatsTest(unittest.TestCase):
         )
         db = stats.open_database(self.path)
         self.assertEqual(db.execute("SELECT total_points FROM player_cup_summary WHERE player = 'Zamiza'").fetchone()[0], 10)
-        self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 2)
+        self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 3)
         db.close()
 
     def test_repeated_race_replaces_earlier(self):
