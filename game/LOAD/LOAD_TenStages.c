@@ -589,6 +589,10 @@ int LOAD_TenStages(struct GameTracker *unusedGameTracker, int loadingStage, stru
 		levelTracker = GAME_TRACKER_RELOAD();
 		queueLevelID = levelTracker->levelID;
 		queueLod = sdata->levelLOD;
+#if defined(CTR_NATIVE)
+		// Special Nights: 2P-4P use the full 1P track files.
+		queueLod = SpecialNights_LevelFileLod(queueLod);
+#endif
 		// NOTE(aalhendi): Retail sets the load gate before queueing level files.
 		sdata->load_inProgress = 1;
 		CTR_PSX_MEMORY_BARRIER();
@@ -597,11 +601,19 @@ int LOAD_TenStages(struct GameTracker *unusedGameTracker, int loadingStage, stru
 		if (((u32)(GAME_TRACKER->levelID - GEM_STONE_VALLEY) < LOAD_PTR_MAP_ADV_LEVEL_COUNT) ||
 		    ((u32)(GAME_TRACKER->levelID - CREDITS_CRASH) < LOAD_PTR_MAP_CREDIT_LEVEL_COUNT))
 		{
+#if defined(CTR_NATIVE)
+			LOAD_AppendQueue(bigfile, LT_GETADDR, LOAD_GetBigfileIndex(GAME_TRACKER->levelID, queueLod, LVI_LEV), NULL, LOAD_Callback_LEV);
+#else
 			LOAD_AppendQueue(bigfile, LT_GETADDR, LOAD_GetBigfileIndex(GAME_TRACKER->levelID, sdata->levelLOD, LVI_LEV), NULL, LOAD_Callback_LEV);
+#endif
 
 			// add PTR file to loading queue
 			{
+#if defined(CTR_NATIVE)
+				int indexResult = LOAD_GetBigfileIndex(GAME_TRACKER->levelID, queueLod, LVI_PTR);
+#else
 				int indexResult = LOAD_GetBigfileIndex(GAME_TRACKER->levelID, sdata->levelLOD, LVI_PTR);
+#endif
 				// NOTE(aalhendi): Keep the call-result move after the bigfile/type arguments.
 				CTR_PSX_PREPARE_QUEUE_ARGS(queueBigfile, queueType, queuedFileIndex, bigfile, LT_SETADDR, indexResult);
 			}
@@ -611,7 +623,11 @@ int LOAD_TenStages(struct GameTracker *unusedGameTracker, int loadingStage, stru
 		else
 		{
 			{
+#if defined(CTR_NATIVE)
+				int indexResult = LOAD_GetBigfileIndex(GAME_TRACKER->levelID, queueLod, LVI_LEV);
+#else
 				int indexResult = LOAD_GetBigfileIndex(GAME_TRACKER->levelID, sdata->levelLOD, LVI_LEV);
+#endif
 				CTR_PSX_PREPARE_QUEUE_ARGS(queueBigfile, queueType, queuedFileIndex, bigfile, LT_GETADDR, indexResult);
 			}
 			queueDestination = NULL;

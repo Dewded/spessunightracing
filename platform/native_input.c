@@ -620,6 +620,15 @@ internal s32 NativeInput_FindSlotForDeviceIndex(Sint32 deviceIndex)
 {
 	s32 slot;
 
+	// Already open: nothing to assign.
+	for (slot = 0; slot < NATIVE_INPUT_MAX_CONTROLLERS; slot++)
+	{
+		if ((s_controllers[slot].controller != NULL) && (s_controllers[slot].instanceId == (SDL_JoystickID)deviceIndex))
+		{
+			return -1;
+		}
+	}
+
 	for (slot = 0; slot < NATIVE_INPUT_MAX_CONTROLLERS; slot++)
 	{
 		if (s_controllerToSlotMapping[slot] == deviceIndex)
@@ -673,6 +682,17 @@ internal void NativeInput_OpenController(SDL_JoystickID instanceId, s32 slot)
 	if (SDL_IsGamepad(instanceId) == 0)
 	{
 		return;
+	}
+
+	// SDL3 also sends GAMEPAD_ADDED at startup for pads OpenKnownControllers has
+	// already opened; opening one twice made one pad drive two players (and made
+	// 3P/4P selectable with two pads).
+	for (s32 other = 0; other < NATIVE_INPUT_MAX_CONTROLLERS; other++)
+	{
+		if ((s_controllers[other].controller != NULL) && (s_controllers[other].instanceId == instanceId))
+		{
+			return;
+		}
 	}
 
 	struct NativeInputController *controller = &s_controllers[slot];

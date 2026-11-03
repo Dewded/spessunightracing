@@ -14,6 +14,8 @@ b32 NativeDisplay_IsWidescreen(void);
 b32 NativeDisplay_IsFullscreen(void);
 // --retail-karts: keep retail's per-player-count kart models instead of high detail for all.
 b32 NativeDisplay_RetailKarts(void);
+// --retail-tracks: 2P-4P load the track's reduced multiplayer version instead of the 1P one.
+b32 NativeDisplay_RetailTracks(void);
 s32 NativeDisplay_GetRenderScaleOverride(void);
 s32 NativeDisplay_GetSideExtension(s32 screenWidth);
 void NativeDisplay_WidenViewport(s16 *x, s16 *w, s32 screenWidth);

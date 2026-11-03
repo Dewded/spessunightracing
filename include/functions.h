@@ -472,6 +472,7 @@ void SpecialNights_AssignAiBeforePacks(s32 levelLOD);
 void SpecialNights_AssignAiAfterPacks(s32 levelLOD);
 void SpecialNights_PrepareRaceModels(struct GameTracker *gGT);
 struct Model *SpecialNights_FindRaceModel(const char *name);
+s32 SpecialNights_LevelFileLod(s32 lod);
 struct MenuRow *SpecialNights_MainMenuRows(b32 withScrapbook);
 b32 SpecialNights_IsStatsRow(s32 stringIndex);
 void MM_SpecialNightsStats_Init(void);

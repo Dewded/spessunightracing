@@ -27,6 +27,52 @@ static void MainInit_InitVisMemBspListNodes(struct VisMem *visMem, struct mesh_i
 }
 #endif
 
+#ifdef CTR_NATIVE
+// Special Nights: 2P-4P can run on a 1P track file, whose per-player visibility
+// lists may be missing (NULL) or shared with player 1 for players 2-4. Give
+// every such player its own host buffer, sized from the level.
+internal void MainInit_EnsureVisList(int **lists, int player, s32 bits, int **spare, u32 *spareBytes)
+{
+	const u32 bytes = (u32)(((bits + 0x1f) >> 5) << 2);
+
+	if ((lists[player] != NULL) && (lists[player] != lists[0]))
+	{
+		return;
+	}
+	if ((*spare == NULL) || (*spareBytes < bytes))
+	{
+		free(*spare);
+		*spare = (int *)calloc(1, (bytes != 0) ? bytes : 4);
+		*spareBytes = bytes;
+	}
+	if (*spare != NULL)
+	{
+		memset(*spare, 0, bytes);
+		lists[player] = *spare;
+	}
+}
+
+internal void MainInit_EnsurePlayerVisMem(struct GameTracker *gGT, struct VisMem *visMem)
+{
+	static int *s_spare[4][4];
+	static u32 s_spareBytes[4][4];
+	struct Level *level = gGT->level1;
+	struct mesh_info *mesh = level->ptr_mesh_info;
+
+	if (mesh == NULL)
+	{
+		return;
+	}
+	for (int i = 1; i < gGT->numPlyrCurrGame; i++)
+	{
+		MainInit_EnsureVisList(visMem->visLeafList, i, mesh->numBspNodes, &s_spare[i][0], &s_spareBytes[i][0]);
+		MainInit_EnsureVisList(visMem->visFaceList, i, mesh->numQuadBlock, &s_spare[i][1], &s_spareBytes[i][1]);
+		MainInit_EnsureVisList(visMem->visOVertList, i, level->numWaterVertices, &s_spare[i][2], &s_spareBytes[i][2]);
+		MainInit_EnsureVisList(visMem->visSCVertList, i, level->numSCVert, &s_spare[i][3], &s_spareBytes[i][3]);
+	}
+}
+#endif
+
 void MainInit_VisMem(struct GameTracker *gGT)
 {
 	struct VisMem *visMem = gGT->level1->visMem;
@@ -36,6 +82,10 @@ void MainInit_VisMem(struct GameTracker *gGT)
 	{
 		return;
 	}
+
+#ifdef CTR_NATIVE
+	MainInit_EnsurePlayerVisMem(gGT, visMem);
+#endif
 
 	for (int i = 0; i < gGT->numPlyrCurrGame; i++)
 	{

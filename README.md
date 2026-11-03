@@ -179,6 +179,7 @@ picture at the left and right edges, while the HUD, menus and videos keep their 
 | `--4x3` | Original 4:3 picture |
 | `--scale N` | Render at N× PS1 resolution (`1`–`8`); `0` (default) picks the smallest scale that fills the window height |
 | `--retail-karts` | Retail's per-player-count kart models in 2P-4P instead of high detail for all |
+| `--retail-tracks` | Retail's reduced multiplayer track versions in 2P-4P instead of the 1P track |
 
 `--scale 1 --4x3` reproduces the original presentation.
 
@@ -192,6 +193,8 @@ picture at the left and right edges, while the HUD, menus and videos keep their 
 - **Detailed karts at any distance:** multiplayer no longer swaps distant karts for sprites. In races and battles
   every racer uses its high-detail (1P) model. `--retail-karts` keeps retail's lower-detail models for 2P-4P (for
   example if their textures look wrong).
+- **Full-detail tracks in multiplayer:** 2P-4P races and battles load the 1P version of the track. `--retail-tracks`
+  goes back to the reduced multiplayer versions.
 - The red ribbon under the title logo reads **SPESSU NIGHT**. The game rebuilds it each time the main menu loads, from
   the ribbon's own original letters (P is made from R and U from H). Nothing changes unless the ribbon is the
   untouched NTSC-U original.

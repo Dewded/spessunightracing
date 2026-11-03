@@ -157,6 +157,21 @@ void SpecialNights_PrepareRaceModels(struct GameTracker *gGT)
 	}
 }
 
+// Track files (geometry, textures, pointer map) for a level LOD: 2P-4P races and
+// battles use the full 1P track unless --retail-tracks. The kart pack keeps the
+// player count's LOD.
+s32 SpecialNights_LevelFileLod(s32 lod)
+{
+	struct GameTracker *gGT = GAME_TRACKER;
+
+	if (!NativeDisplay_RetailTracks() && (lod >= LOAD_LEVEL_LOD_2P) && (lod <= LOAD_LEVEL_LOD_4P) && (gGT->levelID < GEM_STONE_VALLEY) &&
+	    ((gGT->gameMode1 & (ADVENTURE_MODE | MAIN_MENU | GAME_CUTSCENE)) == 0))
+	{
+		return LOAD_LEVEL_LOD_1P;
+	}
+	return lod;
+}
+
 // VehBirth_GetModelByName: karts prepared for this race win over the packs.
 struct Model *SpecialNights_FindRaceModel(const char *name)
 {

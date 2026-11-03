@@ -466,6 +466,18 @@ void UI_RenderFrame_Racing()
 				sVar2 = hudStructPtr[UI_HUD_SLOT_RANK].y;
 				UI_DrawPosSuffix(sVar1, sVar2, playerStruct, (s16)partTimeVariable5);
 
+#if defined(CTR_NATIVE)
+				// Special Nights: 3P/4P Arcade has 8 racers, but the 3P/4P icon set only
+				// has big numbers 1-4; 5th-8th get the digit in the big font instead.
+				if ((numPlyr > 2) && (playerStruct->driverRank >= 4))
+				{
+					char rankDigit[2] = {(char)('1' + playerStruct->driverRank), 0};
+
+					DecalFont_DrawLine(rankDigit, hudStructPtr[UI_HUD_SLOT_RANK].x - 1, hudStructPtr[UI_HUD_SLOT_RANK].y, FONT_BIG,
+					                   (s16)(JUSTIFY_RIGHT | sVar17));
+				}
+				else
+#endif
 				if (numPlyr > 2)
 				{
 					// Get Color Data
