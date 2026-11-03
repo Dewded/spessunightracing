@@ -87,7 +87,7 @@ class SpecialNightsStatsTest(unittest.TestCase):
     def test_schema_can_be_rerun(self):
         # The game runs the schema on every open.
         self.game.db.executescript(stats.SCHEMA_PATH.read_text(encoding="utf-8"))
-        self.assertEqual(self.game.db.execute("PRAGMA user_version").fetchone()[0], 1)
+        self.assertEqual(self.game.db.execute("PRAGMA user_version").fetchone()[0], 2)
 
     def test_only_completed_cups_count(self):
         g = self.game
@@ -102,9 +102,12 @@ class SpecialNightsStatsTest(unittest.TestCase):
         db = stats.open_database(self.path)
         self.assertEqual(db.execute("SELECT COUNT(*) FROM races").fetchone()[0], 5)
 
-        summary = {row[0]: row[1:] for row in db.execute("SELECT player, cups, cup_wins, avg_final_place, total_points FROM player_cup_summary")}
-        self.assertEqual(summary["Zamiza"], (1, 1, 1.0, 38))
-        self.assertEqual(summary["Fröttis"], (1, 0, 2.0, 32))
+        summary = {
+            row[0]: row[1:]
+            for row in db.execute("SELECT player, cups, cup_wins, avg_final_place, total_points, total_cup_points FROM player_cup_summary")
+        }
+        self.assertEqual(summary["Zamiza"], (1, 1, 1.0, 10, 38))  # 1st among players: 10 placement points
+        self.assertEqual(summary["Fröttis"], (1, 0, 2.0, 6, 32))
 
         h2h = {(p, o): (n, a, b) for p, o, n, a, b in db.execute("SELECT * FROM head_to_head_races")}
         self.assertEqual(h2h[("Zamiza", "Fröttis")], (4, 3, 1))
@@ -116,9 +119,39 @@ class SpecialNightsStatsTest(unittest.TestCase):
         text = stats.report(db)
         self.assertIn("1 counted cups (1 unfinished, not counted)", text)
         self.assertIn("Zamiza", text)
+        self.assertEqual(db.execute("SELECT COUNT(*) FROM races").fetchone()[0], 5)  # opening never touches data
+        db.close()
 
-        with self.assertRaises(sqlite3.OperationalError):
-            db.execute("DELETE FROM races")  # reports never write
+    def test_places_count_among_players_only(self):
+        # Arcade cup: AI racers finish 1st and 3rd, the players 2nd and 4th overall.
+        self.game.cup_end("run-1", [(AI_A, 40), (FROTTIS, 30), (AI_B, 20), (ZAMIZA, 10)])
+        db = stats.open_database(self.path)
+        places = dict(db.execute("SELECT player, player_place FROM counted_player_cup_places").fetchall())
+        self.assertEqual(places, {"Fröttis": 1, "Zamiza": 2})
+        summary = dict(db.execute("SELECT player, total_points FROM player_cup_summary").fetchall())
+        self.assertEqual(summary, {"Fröttis": 10, "Zamiza": 6})
+        db.close()
+
+    def test_placement_points_are_editable(self):
+        self.game.cup_end("run-1", [(ZAMIZA, 38), (FROTTIS, 32)])
+        self.game.db.execute("UPDATE placement_points SET points = 25 WHERE place = 1")
+        self.game.db.commit()
+        db = stats.open_database(self.path)  # re-running the schema keeps the edit
+        summary = dict(db.execute("SELECT player, total_points FROM player_cup_summary").fetchall())
+        self.assertEqual(summary, {"Zamiza": 25, "Fröttis": 6})
+        db.close()
+
+    def test_old_database_gets_new_views(self):
+        self.game.cup_end("run-1", [(ZAMIZA, 38), (FROTTIS, 32)])
+        # A version 1 database: old summary view, no placement scoring.
+        self.game.db.executescript(
+            "DROP VIEW player_cup_summary; DROP VIEW counted_player_cup_places; DROP TABLE placement_points;"
+            "CREATE VIEW player_cup_summary AS SELECT player, COUNT(*) AS cups FROM counted_cup_results GROUP BY player;"
+            "PRAGMA user_version = 1;"
+        )
+        db = stats.open_database(self.path)
+        self.assertEqual(db.execute("SELECT total_points FROM player_cup_summary WHERE player = 'Zamiza'").fetchone()[0], 10)
+        self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 2)
         db.close()
 
     def test_repeated_race_replaces_earlier(self):

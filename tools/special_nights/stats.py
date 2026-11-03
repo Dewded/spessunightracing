@@ -24,8 +24,14 @@ SCHEMA_PATH = Path(__file__).resolve().with_name("schema.sql")
 
 
 def open_database(db_path: Path) -> sqlite3.Connection:
-    """Opens a stats database read-only (the game owns all writes)."""
-    return sqlite3.connect(f"{db_path.resolve().as_uri()}?mode=ro", uri=True)
+    """Opens a stats database and applies the schema, as the game does on every open.
+
+    The schema only creates what is missing and rebuilds the views, so this never
+    touches recorded data; it keeps reports current after a schema update.
+    """
+    db = sqlite3.connect(db_path)
+    db.executescript(SCHEMA_PATH.read_text(encoding="utf-8"))
+    return db
 
 
 # ---------------------------------------------------------------------------
@@ -62,11 +68,11 @@ def report(db: sqlite3.Connection) -> str:
 
     sections.append(
         _table(
-            "Cup leaderboard",
-            ["Player", "Cups", "Wins", "Podiums", "Avg place", "Points", "Avg points"],
+            "Cup leaderboard (places among players; points from placement_points)",
+            ["Player", "Cups", "Wins", "Podiums", "Avg place", "Points", "Avg points", "Cup points"],
             db.execute(
-                """SELECT player, cups, cup_wins, cup_podiums, avg_final_place, total_points, avg_points
-                   FROM player_cup_summary ORDER BY cup_wins DESC, avg_final_place, total_points DESC"""
+                """SELECT player, cups, cup_wins, cup_podiums, avg_final_place, total_points, avg_points, total_cup_points
+                   FROM player_cup_summary ORDER BY total_points DESC, cup_wins DESC, avg_final_place"""
             ).fetchall(),
         )
     )

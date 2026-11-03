@@ -209,9 +209,13 @@ Arcade and VS cups are recorded for the stats tables when every human player has
 - **Only finished, confirmed cups count:** if anyone has no name when the first race finishes, nothing in that cup is
   written. If a cup is quit early, its races stay in the database but every view and report skips them.
 - **In the game:** the main menu has a **SPESSU STATS** entry under HIGH SCORE. Its pages are the cup leaderboard,
-  a **points race chart for each year** (every player's running cup points, cup by cup, one coloured line each),
+  a **points race chart for each year** (every player's running points, cup by cup, one coloured line each),
   recent cups, head to head (races and cups), best laps, top speeds and one page per player. Switch pages with
   **L1/R1** or **left/right**, scroll long pages with **up/down**, and press **Triangle** to go back.
+- **Scoring:** each cup gives points for the finishing place among the human players, ignoring AI racers: by
+  default 10 for 1st, 6 for 2nd, 3 for 3rd and 1 for 4th. Wins, podiums and average place count the same way. To
+  change the points, edit the `placement_points` table in the database; every place without a row scores 0. The
+  game's own cup score is still stored, as `total_cup_points` in `player_cup_summary`.
 - **Looking at the data:** `python tools/special_nights/stats.py` (run from the base folder, or pass the path to the
   database) prints the cup leaderboard, cup history, per-track results, head-to-head records for races and cups, and
   track records. Any SQLite browser can open the database. Its views `player_cup_summary`, `player_track_summary`,

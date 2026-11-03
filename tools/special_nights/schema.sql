@@ -2,7 +2,9 @@
 --
 -- The game runs this whole script every time it opens the database, so every
 -- statement must be safe to repeat. CMake embeds it into the game as a C string.
--- Bump user_version (and migrate in game/SpecialNightsStats.c) when tables change.
+-- Views are dropped and recreated on every open, so changing one here updates
+-- existing databases too. Bump user_version (and migrate in
+-- game/SpecialNightsStats.c) when tables change.
 
 PRAGMA foreign_keys = ON;
 
@@ -71,7 +73,24 @@ CREATE TABLE IF NOT EXISTS cup_results (
     PRIMARY KEY (cup_run, slot)
 );
 
+-- Points for a cup by finishing place among the human players (AI ignored).
+-- Edit the rows to change the scoring; places without a row score 0.
+CREATE TABLE IF NOT EXISTS placement_points (
+    place INTEGER PRIMARY KEY,
+    points INTEGER NOT NULL
+);
+INSERT OR IGNORE INTO placement_points (place, points) VALUES (1, 10), (2, 6), (3, 3), (4, 1);
+
 -- Everything below only looks at completed cups.
+
+DROP VIEW IF EXISTS counted_race_results;
+DROP VIEW IF EXISTS counted_cup_results;
+DROP VIEW IF EXISTS counted_player_cup_places;
+DROP VIEW IF EXISTS player_cup_summary;
+DROP VIEW IF EXISTS player_track_summary;
+DROP VIEW IF EXISTS head_to_head_races;
+DROP VIEW IF EXISTS head_to_head_cups;
+DROP VIEW IF EXISTS track_records;
 
 CREATE VIEW IF NOT EXISTS counted_race_results AS
 SELECT rr.*, r.cup_run, r.track_index, r.level_id, r.track_name, r.recorded_at,
@@ -87,16 +106,27 @@ FROM cup_results cr
 JOIN cup_runs c ON c.cup_run = cr.cup_run
 WHERE c.completed = 1;
 
+-- Each human's finishing place among the humans of a cup, and the points it scores.
+CREATE VIEW IF NOT EXISTS counted_player_cup_places AS
+SELECT ranked.*, COALESCE(pp.points, 0) AS place_points
+FROM (SELECT cup_run, started_at, player, final_place, points AS cup_points,
+             RANK() OVER (PARTITION BY cup_run ORDER BY final_place) AS player_place
+      FROM counted_cup_results
+      WHERE human = 1) ranked
+LEFT JOIN placement_points pp ON pp.place = ranked.player_place;
+
+-- Wins, podiums and average place count among the humans; total_points are
+-- placement points, cup_points the game's own cup score.
 CREATE VIEW IF NOT EXISTS player_cup_summary AS
 SELECT player,
        COUNT(*) AS cups,
-       SUM(final_place = 1) AS cup_wins,
-       SUM(final_place <= 3) AS cup_podiums,
-       ROUND(AVG(final_place), 2) AS avg_final_place,
-       SUM(points) AS total_points,
-       ROUND(AVG(points), 1) AS avg_points
-FROM counted_cup_results
-WHERE human = 1
+       SUM(player_place = 1) AS cup_wins,
+       SUM(player_place <= 3) AS cup_podiums,
+       ROUND(AVG(player_place), 2) AS avg_final_place,
+       SUM(place_points) AS total_points,
+       ROUND(AVG(place_points), 1) AS avg_points,
+       SUM(cup_points) AS total_cup_points
+FROM counted_player_cup_places
 GROUP BY player;
 
 CREATE VIEW IF NOT EXISTS player_track_summary AS
@@ -149,4 +179,4 @@ SELECT level_id, track_name,
 FROM counted_race_results t
 GROUP BY level_id;
 
-PRAGMA user_version = 1;
+PRAGMA user_version = 2;

@@ -3,7 +3,7 @@
 // Special Nights: the "SPESSU STATS" main menu screen (native builds only).
 //
 // Reads special_nights.db (see game/SpecialNightsStats.c) when the screen
-// opens and shows it as pages: cup leaderboard, a points race chart per year,
+// opens and shows it as pages: cup leaderboard (placement points), a points race chart per year,
 // recent cups, head to head, best laps, top speeds, and one page per player.
 // L1/R1 or left/right flip
 // pages, up/down scroll, Triangle/Square returns to the main menu.
@@ -19,7 +19,7 @@
 #define SN_SCREEN_ROW_Y0      52
 #define SN_SCREEN_ROW_STEP    10
 
-// Year chart: each player's running cup points after each cup of the year.
+// Year chart: each player's running placement points after each cup of the year.
 #define SN_CHART_MAX_CUPS    96
 #define SN_CHART_MAX_PLAYERS 12
 #define SN_CHART_X0          44
@@ -247,7 +247,7 @@ internal s32 SpecialNights_ChartColor(const char *player, s32 fallback)
 	return s_snChartColors[fallback % SN_CHART_MAX_PLAYERS];
 }
 
-// One chart page per year, newest first: running cup points of every player.
+// One chart page per year, newest first: running placement points of every player.
 internal void SpecialNights_LoadYearCharts(sqlite3 *db)
 {
 	struct SpecialNightsChart *chart = NULL;
@@ -258,9 +258,8 @@ internal void SpecialNights_LoadYearCharts(sqlite3 *db)
 	s32 chartFirst = s_snNumCharts;
 
 	if (sqlite3_prepare_v2(db,
-	                       "SELECT substr(c.started_at, 1, 4), c.cup_run, cr.player, cr.points FROM cup_results cr "
-	                       "JOIN cup_runs c ON c.cup_run = cr.cup_run WHERE c.completed = 1 AND cr.human = 1 "
-	                       "ORDER BY c.started_at, c.cup_run",
+	                       "SELECT substr(started_at, 1, 4), cup_run, player, place_points FROM counted_player_cup_places "
+	                       "ORDER BY started_at, cup_run",
 	                       -1, &stmt, NULL) != SQLITE_OK)
 	{
 		SpecialNights_DbLogError(db, "year chart query");
@@ -382,13 +381,22 @@ internal void SpecialNights_LoadStatsPages(void)
 	s_snNumCharts = 0;
 	s_snMessage[0] = 0;
 
-	if (sqlite3_open_v2(SPECIAL_NIGHTS_DB_FILE, &db, SQLITE_OPEN_READONLY, NULL) != SQLITE_OK)
+	// Opened through the writer so the schema (and its views) are current, but
+	// never created just by looking.
 	{
-		sqlite3_close(db);
+		FILE *existing = fopen(SPECIAL_NIGHTS_DB_FILE, "rb");
+
+		if (existing != NULL)
+		{
+			fclose(existing);
+			db = SpecialNights_DbOpen();
+		}
+	}
+	if (db == NULL)
+	{
 		snprintf(s_snMessage, sizeof(s_snMessage), "NO CUPS RECORDED YET");
 		return;
 	}
-	sqlite3_busy_timeout(db, 1000);
 
 	page = SpecialNights_NewPage("Cup Leaderboard");
 	if (page != NULL)
@@ -401,7 +409,7 @@ internal void SpecialNights_LoadStatsPages(void)
 		SpecialNights_AddColumn(page, 496, JUSTIFY_RIGHT, "PTS");
 		SpecialNights_FillPage(db, page,
 		                       "SELECT player, cups, cup_wins, cup_podiums, printf('%.2f', avg_final_place), total_points FROM player_cup_summary "
-		                       "ORDER BY cup_wins DESC, avg_final_place, total_points DESC",
+		                       "ORDER BY total_points DESC, cup_wins DESC, avg_final_place",
 		                       NULL, 0);
 	}
 
