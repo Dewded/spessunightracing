@@ -1768,7 +1768,13 @@ struct Thread *CS_Thread_Init(s32 modelID, const char *name, struct CsThreadInit
 		}
 		else
 		{
+#if defined(CTR_NATIVE)
+			// Special Nights: Oxide's first-place script is retail's empty default; as a
+			// winner he animates with the dance that goes with his (boss) podium model.
+			if ((modelID == GAME_TRACKER->podium_modelIndex_First) && (modelID != STATIC_OXIDEDANCE))
+#else
 			if (modelID == GAME_TRACKER->podium_modelIndex_First)
+#endif
 				CS_ScriptCmd_OpcodeAt(cs, CS_SCRIPT(danceFirstScripts)[value]);
 			else
 				CS_ScriptCmd_OpcodeAt(cs, CS_SCRIPT(danceOtherScripts)[value]);

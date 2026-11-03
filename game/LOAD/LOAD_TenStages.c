@@ -709,6 +709,15 @@ int LOAD_TenStages(struct GameTracker *unusedGameTracker, int loadingStage, stru
 			fileIndex = podiumPackIndex + (GAME_TRACKER->podium_modelIndex_First - STATIC_CRASHDANCE) * LOAD_PODIUM_MODEL_FILE_STRIDE + (BI_DANCEMODELWIN - 1);
 			LOAD_AppendQueue(bigfile, LT_GETADDR, fileIndex, &data.podiumModel_firstPlace, LOAD_QUEUE_CALLBACK_SET_POINTER);
 		}
+#if defined(CTR_NATIVE)
+		// Special Nights: Oxide can win a cup. Retail has no winning dance model for
+		// him, so he stands on top with the one he uses as a beaten boss.
+		else if (GAME_TRACKER->podium_modelIndex_First == STATIC_OXIDEDANCE)
+		{
+			fileIndex = podiumPackIndex + (STATIC_OXIDEDANCE - STATIC_CRASHDANCE) * LOAD_PODIUM_MODEL_FILE_STRIDE + (BI_DANCEMODELLOSE - 1);
+			LOAD_AppendQueue(bigfile, LT_GETADDR, fileIndex, &data.podiumModel_firstPlace, LOAD_QUEUE_CALLBACK_SET_POINTER);
+		}
+#endif
 
 		// podium second place
 		if (GAME_TRACKER->podium_modelIndex_Second != 0)

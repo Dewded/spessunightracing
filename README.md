@@ -191,7 +191,8 @@ picture at the left and right edges, while the HUD, menus and videos keep their 
   the character's own (orange), or BALANCED, ACCEL, SPEED or TURN (white). Human players' karts use the chosen class's
   stats and engine sound; AI racers keep their character's class. The choice is kept between races.
 - **Nitros Oxide is playable:** he has his own (16th) icon on character select, next to Fake Crash. His kart preview is
-  loaded from the disc on demand. Quick test: `--track "Crash Cove" --character oxide`.
+  loaded from the disc on demand. He also appears on the cup podium; as the winner he uses his beaten-boss dance,
+  because the game has no winning one for him. Quick test: `--track "Crash Cove" --character oxide`.
 
 ## Special Nights Stats
 
