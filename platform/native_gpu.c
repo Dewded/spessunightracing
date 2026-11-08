@@ -483,6 +483,13 @@ void MakeTexcoordQuad(GrVertex *vertex, u8 *uv0, u8 *uv1, u8 *uv2, u8 *uv3, s16 
 	    vertex[3].tcx = -1;
 	    vertex[3].tcy = -1;
 	}*/
+	// Native tint flag (Special Nights blue flames) rides in the spare vertex byte.
+	const s8 tint = ((page & NATIVE_TPAGE_FLAG_TINT_BLUE) == NATIVE_TPAGE_FLAG_TINT_BLUE) ? 1 : 0;
+	vertex[0]._p0 = tint;
+	vertex[1]._p0 = tint;
+	vertex[2]._p0 = tint;
+	vertex[3]._p0 = tint;
+
 }
 
 void MakeTexcoordTriangle(GrVertex *vertex, u8 *uv0, u8 *uv1, u8 *uv2, s16 page, s16 clut, u8 dither)
@@ -529,6 +536,12 @@ void MakeTexcoordTriangle(GrVertex *vertex, u8 *uv0, u8 *uv1, u8 *uv2, s16 page,
 	    vertex[3].tcx = -1;
 	    vertex[3].tcy = -1;
 	}*/
+	// Native tint flag (Special Nights blue flames) rides in the spare vertex byte.
+	const s8 tint = ((page & NATIVE_TPAGE_FLAG_TINT_BLUE) == NATIVE_TPAGE_FLAG_TINT_BLUE) ? 1 : 0;
+	vertex[0]._p0 = tint;
+	vertex[1]._p0 = tint;
+	vertex[2]._p0 = tint;
+
 }
 
 void MakeTexcoordRect(GrVertex *vertex, u8 *uv, s16 page, s16 clut, s16 w, s16 h)
@@ -591,6 +604,13 @@ void MakeTexcoordRect(GrVertex *vertex, u8 *uv, s16 page, s16 clut, s16 w, s16 h
 		vertex[3].tcx = -1;
 		vertex[3].tcy = -1;
 	}
+	// Native tint flag (Special Nights blue flames) rides in the spare vertex byte.
+	const s8 tint = ((page & NATIVE_TPAGE_FLAG_TINT_BLUE) == NATIVE_TPAGE_FLAG_TINT_BLUE) ? 1 : 0;
+	vertex[0]._p0 = tint;
+	vertex[1]._p0 = tint;
+	vertex[2]._p0 = tint;
+	vertex[3]._p0 = tint;
+
 }
 
 void MakeTexcoordLineZero(GrVertex *vertex, u8 dither)

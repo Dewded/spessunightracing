@@ -21,4 +21,9 @@ s32 NativeDisplay_GetSideExtension(s32 screenWidth);
 void NativeDisplay_WidenViewport(s16 *x, s16 *w, s32 screenWidth);
 void NativeDisplay_ClampDrawArea(s16 *x, s16 *w, s32 pageX, s32 pageW);
 
+// Native-only texture page flag in bits 14-15, which the PS1 GPU ignores: the
+// renderer recolours textured primitives carrying it light blue (Special
+// Nights super turbo flames).
+#define NATIVE_TPAGE_FLAG_TINT_BLUE 0xC000
+
 #endif

@@ -942,6 +942,11 @@ GLint u_psxTextureOutputStpLoc;
 	    "	}\n"                                                                                                                                        \
 	    "	void main() {\n"                                                                                                                            \
 	    "		vec4 color = (bilinearFilter > 0) ? bilinearTextureSample(v_texcoord.xy) : nearestTextureSample(v_texcoord.xy);\n"                         \
+	    "		// Tint flag (NATIVE_TPAGE_FLAG_TINT_BLUE): texel brightness mapped onto light blue.\n"                                                    \
+	    "		if (v_tint > 0.5) {\n"                                                                                                                      \
+	    "			float l = dot(color.rgb, vec3(0.299, 0.587, 0.114));\n"                                                                                  \
+	    "			color.rgb = min(vec3(l * 0.6, l * 1.1, l * 1.4), vec3(1.0));\n"                                                                         \
+	    "		}\n"                                                                                                                                        \
 	    "		fragColor = dither(color * v_color);\n"                                                                                                    \
 	    "		fragColor.a = (psxDrawMaskSet != 0 || (psxTextureOutputStp != 0 && sampledStp >= 0.5)) ? 1.0 : 0.0;\n"                                     \
 	    "	}\n"
@@ -950,7 +955,8 @@ global_variable const char *gpu_shader_common = "	varying vec4 v_texcoord;\n"
                                                 "	varying vec4 v_color;\n"
                                                 "	varying vec4 v_page_clut;\n"
                                                 "	varying vec2 v_ditherCoord;\n"
-                                                "	varying float v_z;\n";
+                                                "	varying float v_z;\n"
+                                                "	varying float v_tint;\n";
 
 const char *gte_shader_4 = GPU_FRAGMENT_SAMPLE_SHADER(4);
 const char *gte_shader_8 = GPU_FRAGMENT_SAMPLE_SHADER(8);
@@ -971,13 +977,14 @@ const char *gte_shader_32_rgba = "	uniform sampler2D s_texture;\n"
 	"	attribute vec4 a_position;\n"                                                                                \
 	"	attribute vec4 a_texcoord; // uv, color multiplier, dither\n"                                                \
 	"	attribute vec4 a_color;\n"                                                                                   \
-	"	attribute vec4 a_extra; // texcoord.xy ofs, unused.xy\n"                                                     \
+	"	attribute vec4 a_extra; // texcoord.xy ofs, tint flag, unused\n"                                             \
 	"	uniform mat4 Projection;\n"                                                                                  \
 	"	const vec2 c_UVFudge = vec2(0.00025, 0.00025);\n"                                                            \
 	"	void main() {\n"                                                                                             \
 	"		v_ditherCoord = a_position.xy;\n"                                                                           \
 	"		v_texcoord = a_texcoord;\n"                                                                                 \
 	"		v_texcoord.xy += a_extra.xy * 0.5;\n"                                                                       \
+	"		v_tint = a_extra.z;\n"                                                                                      \
 	"		v_color = a_color;\n"                                                                                       \
 	"		v_color.xyz *= a_texcoord.z;\n"                                                                             \
 	"		v_page_clut.x = fract(a_position.z / 16.0) * 1024.0;\n"                                                     \

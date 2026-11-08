@@ -7,14 +7,15 @@
 // speed. Super turbo pads give 0x800 (AI: 0x900); everything else stays at or
 // below 0x180 (AI on normal pads). Retail draws the same orange flames for all
 // of them. While a kart's cap corresponds to SN_FLAME_BLUE_FIRE_LEVEL or more,
-// its flames use copies of the eight flame frames with vertex colours
-// recoloured light blue; the copies share everything else with the originals.
+// its flames use copies of the eight flame frames whose texture layouts carry
+// NATIVE_TPAGE_FLAG_TINT_BLUE; the renderer recolours those texels light blue.
+// The copies share geometry, colours and textures with the originals.
 
 #if defined(CTR_NATIVE)
 
-#define SN_FLAME_FRAMES      8
-#define SN_FLAME_MAX_HEADERS 4
-#define SN_FLAME_MAX_COLORS  128
+#define SN_FLAME_FRAMES          8
+#define SN_FLAME_MAX_HEADERS     4
+#define SN_FLAME_MAX_LAYOUTS     64
 #define SN_FLAME_BLUE_FIRE_LEVEL 0x400
 
 struct SpecialNightsBlueFlame
@@ -22,7 +23,8 @@ struct SpecialNightsBlueFlame
 	struct Model *source;
 	struct Model model;
 	struct ModelHeader headers[SN_FLAME_MAX_HEADERS];
-	u32 colors[SN_FLAME_MAX_HEADERS][SN_FLAME_MAX_COLORS];
+	struct TextureLayout *layoutPtrs[SN_FLAME_MAX_HEADERS][SN_FLAME_MAX_LAYOUTS];
+	struct TextureLayout layouts[SN_FLAME_MAX_HEADERS][SN_FLAME_MAX_LAYOUTS];
 	b32 valid;
 };
 
@@ -34,45 +36,22 @@ void SpecialNights_ResetBlueFlames(void)
 	memset(s_snBlueFlames, 0, sizeof(s_snBlueFlames));
 }
 
-// Number of colour words a header's command list reads: the count retail copies
-// to the scratchpad (first word), or the highest index any command uses.
-internal s32 SpecialNights_FlameColorCount(const struct ModelHeader *mh)
+// Texture layouts a header's draw commands use (texture index is 1-based, low 9 bits).
+internal s32 SpecialNights_FlameLayoutCount(const struct ModelHeader *mh)
 {
 	const u32 *commands = (const u32 *)(size_t)mh->ptrCommandList;
-	s32 count = (s32)commands[0];
+	s32 count = 0;
 
 	for (s32 i = 1; (i < 0x4000) && (commands[i] != 0xffffffffu); i++)
 	{
-		const s32 first = (s32)(((commands[i] >> 7) & 0x1fc) / sizeof(u32)) + 1;
-		const s32 second = (s32)((commands[i] & 0x1fc) / sizeof(u32)) + 1;
-
-		count = (first > count) ? first : count;
-		if ((commands[i] >> 16) == 0)
+		if ((commands[i] >> 16) != 0)
 		{
-			// Colour-only commands carry a second index in the low bits.
-			count = (second > count) ? second : count;
+			const s32 texIndex = (s32)(commands[i] & 0x1ff);
+
+			count = (texIndex > count) ? texIndex : count;
 		}
 	}
-	return (count > SN_FLAME_MAX_COLORS) ? SN_FLAME_MAX_COLORS : count;
-}
-
-// Perceived brightness mapped onto light blue, so the flame keeps its gradient:
-// the orange rim turns deep sky blue and the white core near-white cyan. The
-// GPU code byte stays.
-internal u32 SpecialNights_BlueFlameColor(u32 color)
-{
-	const u32 r = color & 0xff;
-	const u32 g = (color >> 8) & 0xff;
-	const u32 b = (color >> 16) & 0xff;
-	const u32 level = (r * 77 + g * 150 + b * 29) >> 8;
-	u32 newR = level * 6 / 10;
-	u32 newG = level * 11 / 10;
-	u32 newB = level * 14 / 10;
-
-	newR = (newR > 0xff) ? 0xff : newR;
-	newG = (newG > 0xff) ? 0xff : newG;
-	newB = (newB > 0xff) ? 0xff : newB;
-	return (color & 0xff000000u) | newR | (newG << 8) | (newB << 16);
+	return count;
 }
 
 internal struct Model *SpecialNights_BlueFlame(s32 frame, struct Model *source)
@@ -96,18 +75,31 @@ internal struct Model *SpecialNights_BlueFlame(s32 frame, struct Model *source)
 	for (s32 h = 0; h < source->numHeaders; h++)
 	{
 		const struct ModelHeader *mh = &source->headers[h];
+		s32 count;
 
 		blue->headers[h] = *mh;
-		if ((mh->ptrColors == NULL) || (mh->ptrCommandList == 0))
+		if ((mh->ptrTexLayout == NULL) || (mh->ptrCommandList == 0))
 		{
 			continue;
 		}
 
-		for (s32 c = 0; c < SpecialNights_FlameColorCount(mh); c++)
+		count = SpecialNights_FlameLayoutCount(mh);
+		if (count > SN_FLAME_MAX_LAYOUTS)
 		{
-			blue->colors[h][c] = SpecialNights_BlueFlameColor(mh->ptrColors[c]);
+			return source;
 		}
-		blue->headers[h].ptrColors = blue->colors[h];
+		for (s32 t = 0; t < count; t++)
+		{
+			if (mh->ptrTexLayout[t] == NULL)
+			{
+				blue->layoutPtrs[h][t] = NULL;
+				continue;
+			}
+			blue->layouts[h][t] = *mh->ptrTexLayout[t];
+			blue->layouts[h][t].tpage |= NATIVE_TPAGE_FLAG_TINT_BLUE;
+			blue->layoutPtrs[h][t] = &blue->layouts[h][t];
+		}
+		blue->headers[h].ptrTexLayout = blue->layoutPtrs[h];
 	}
 	blue->valid = true;
 	return &blue->model;
