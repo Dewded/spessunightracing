@@ -79,6 +79,12 @@ internal b32 NativeQuickStart_Lookup(const char *arg, const struct NativeQuickSt
 	}
 
 	NativeQuickStart_Normalize(arg, key, sizeof(key));
+	if (key[0] == '\0')
+	{
+		// Nothing to match (e.g. "?"): unknown, so the caller lists the names.
+		return false;
+	}
+
 	for (int i = 0; i < count; i++)
 	{
 		// Prefix match, so "roo" picks Roo's Tubes and "crash" picks Crash Cove.

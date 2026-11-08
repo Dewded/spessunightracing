@@ -22,6 +22,10 @@
 /special_nights.db-journal
 /special_nights_players.txt
 
+# play.bat: last race picked, and personal game options.
+/.play-last.cmd
+/play-options.txt
+
 # Compiler outputs.
 *.exe
 *.o

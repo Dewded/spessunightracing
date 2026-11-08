@@ -2,3 +2,6 @@
 /externals/maspsx/** -text
 /externals/old-gcc/** -text
 /externals/psx-binutils/** -text
+
+# cmd.exe mis-jumps to labels in LF batch files; check them out with CRLF.
+*.bat text eol=crlf

@@ -236,6 +236,23 @@ Arcade and VS cups are recorded for the stats tables when every human player has
   `tools/special_nights/schema.sql`. The game holds the file open only while saving, so it can be read while the game
   runs. Back it up: it is your group's history.
 
+## Quick Launcher (Windows)
+
+`play.bat` in the repository root pulls, builds and starts the game in one step. From PowerShell, run `.\play.bat`
+(or double-click it) for a menu:
+
+| Choice | Does |
+|---|---|
+| 1 | `git pull`, build, start the game |
+| 2 | `git pull`, build, straight into a race (asks for track and character) |
+| 3 | Start the game (no pull, no build) |
+| 4 | Straight into a race (no pull, no build) |
+
+It also takes arguments, skipping the menu: `.\play.bat play`, `.\play.bat race "crash cove" oxide`,
+`.\play.bat run` and `.\play.bat runrace blizzard`. When asked for a track or character, press Enter to reuse the
+last one or type `?` for the list. Options you always want (for example `--fullscreen`) can go on one line in
+`play-options.txt`. If `git pull` fails, for example because of local changes, it offers to build what you have.
+
 ## Debug Quick Start
 
 `--track <name|number>` skips the boot intro and menus and loads straight into a 1-player medium Arcade race, without
