@@ -130,6 +130,36 @@ function Select-Item([string]$Title, [string[]]$Items, [int]$Start = 0, [string[
 # ---------------------------------------------------------------------------
 # Actions
 
+# A plain PowerShell window usually has no cmake on PATH (a Visual Studio
+# Developer prompt does). Find the CMake that ships with Visual Studio, or a
+# standalone install, and put it on PATH for the build.
+function Initialize-CMake {
+    if (Get-Command cmake -ErrorAction SilentlyContinue) { return $true }
+
+    $candidates = @()
+    $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+    if (Test-Path $vswhere) {
+        $vsPaths = & $vswhere -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+        foreach ($vs in @($vsPaths)) {
+            if ($vs) { $candidates += Join-Path $vs 'Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin' }
+        }
+    }
+    $candidates += Join-Path $env:ProgramFiles 'CMake\bin'
+
+    foreach ($dir in $candidates) {
+        if (Test-Path (Join-Path $dir 'cmake.exe')) {
+            $env:PATH = "$dir;$env:PATH"
+            Write-Host "  Using CMake from $dir" -ForegroundColor DarkGray
+            return $true
+        }
+    }
+
+    Write-Host ''
+    Write-Host '  CMake was not found. Install Visual Studio 2022 (or Build Tools) with the' -ForegroundColor Red
+    Write-Host '  "Desktop development with C++" workload, which includes CMake.' -ForegroundColor Red
+    return $false
+}
+
 function Invoke-UpdateAndBuild {
     Clear-Host
     Write-Host '=== git pull ===' -ForegroundColor Cyan
@@ -142,6 +172,10 @@ function Invoke-UpdateAndBuild {
 
     Write-Host ''
     Write-Host '=== build ===' -ForegroundColor Cyan
+    if (-not (Initialize-CMake)) {
+        Wait-Key
+        return $false
+    }
     & cmd.exe /c build-msvc.bat | Out-Host
     if ($LASTEXITCODE -ne 0) {
         Write-Host ''
