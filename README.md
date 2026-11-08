@@ -254,7 +254,7 @@ installation.
 
 ## Debug Quick Start
 
-`--track <name|number>` skips the boot intro and menus and loads straight into a 1-player medium Arcade race, without
+`--track <name|number>` skips the "SCEA Presents" splash and its voice line, the boot intro and the menus, and loads straight into a 1-player medium Arcade race, without
 the start-line fly-in. `--character <name|number>` picks the racer (default Crash). Names ignore case and punctuation and may be
 shortened, e.g. `--track "Crash Cove"`, `--track blizzard`, `--character pura`.
 

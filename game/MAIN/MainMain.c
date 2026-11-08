@@ -635,9 +635,18 @@ void StateZero()
 	PutDrawEnv(&gGT->db[1].drawEnv);
 	DrawSync(0);
 
+#if defined(CTR_NATIVE)
+	// Quick start (--track) goes straight to the race: no "SCEA Presents" splash
+	// or "start your engines" voice line. A normal boot keeps both.
+	if (!NativeQuickStart_IsEnabled())
+	{
+#endif
 	// Load Intro TIM for "SCEA Presents" from VRAM file
 	LOAD_VramFile(sdata->ptrBigfile1, 0x1fd, NULL, &vramSize, -1);
 	MainInit_VRAMDisplay();
+#if defined(CTR_NATIVE)
+	}
+#endif
 
 	// \SOUNDS\KART.HWL;1
 	howl_InitGlobals(data.kartHwlPath);
@@ -649,6 +658,10 @@ void StateZero()
 	CseqMusic_Start(CSEQ_SONG_LEVEL, 0, NULL, 0, 0);
 	Music_Start(0);
 
+#if defined(CTR_NATIVE)
+	if (!NativeQuickStart_IsEnabled())
+	{
+#endif
 	// "Start your engines, for Sony Computer..."
 	CDSYS_XAPlay(CDSYS_XA_TYPE_EXTRA, 0x50);
 
@@ -662,6 +675,9 @@ void StateZero()
 #endif
 		CDSYS_XAPauseAtEnd();
 	}
+#if defined(CTR_NATIVE)
+	}
+#endif
 
 	DecalGlobal_Clear(gGT);
 
