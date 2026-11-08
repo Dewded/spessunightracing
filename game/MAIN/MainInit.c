@@ -380,8 +380,10 @@ void MainInit_Drivers(struct GameTracker *gGT)
 	}
 
 #if defined(CTR_NATIVE)
-	// Special Nights: extra AI karts and high-detail karts, read before anyone spawns.
+	// Special Nights: extra AI karts and high-detail karts, read before anyone spawns;
+	// blue flame copies follow this level's flame models.
 	SpecialNights_PrepareRaceModels(gGT);
+	SpecialNights_ResetBlueFlames();
 #endif
 
 	// Spawn all players,

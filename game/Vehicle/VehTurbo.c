@@ -304,6 +304,11 @@ void VehTurbo_ThTick(struct Thread *turboThread)
 		// STATIC_TURBO_EFFECT7
 		turbo->inst->model =
 		    GAME_TRACKER->modelPtr[(((int)turbo->fireAnimIndex + TURBO_SECONDARY_MODEL_FRAME_OFFSET) & TURBO_ANIM_FRAME_MASK) + STATIC_TURBO_EFFECT];
+#if defined(CTR_NATIVE)
+		// Special Nights: light blue flames above sacred fire speed (super turbo pads).
+		instance->model = SpecialNights_TurboFlameModel(driver, instance->model);
+		turbo->inst->model = SpecialNights_TurboFlameModel(driver, turbo->inst->model);
+#endif
 
 		turbo->fireAnimIndex++;
 

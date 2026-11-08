@@ -264,6 +264,7 @@
 #include "SpecialNightsStats.c"
 #include "SpecialNightsRibbon.c"
 #include "SpecialNightsRacers.c"
+#include "SpecialNightsTurbo.c"
 
 #include "230.c"
 

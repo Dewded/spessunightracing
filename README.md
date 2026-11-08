@@ -193,6 +193,9 @@ picture at the left and right edges, while the HUD, menus and videos keep their 
 - **Detailed karts at any distance:** multiplayer no longer swaps distant karts for sprites. In races and battles
   every racer uses its high-detail (1P) model. `--retail-karts` keeps retail's lower-detail models for 2P-4P (for
   example if their textures look wrong).
+- **Blue super turbo flames:** super turbo pads, and the Super Turbo Pads cheat, boost a kart well past its sacred fire
+  speed, but the original game draws the same orange flames for every boost. Karts boosting that fast now get light
+  blue flames. Normal boosts stay orange.
 - **Full-detail tracks in multiplayer:** 2P-4P races and battles load the 1P version of the track. `--retail-tracks`
   goes back to the reduced multiplayer versions.
 - The red ribbon under the title logo reads **SPESSU NIGHT**. The game rebuilds it each time the main menu loads, from
