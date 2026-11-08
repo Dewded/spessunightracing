@@ -85,6 +85,11 @@ int LOAD_TenStages(struct GameTracker *unusedGameTracker, int loadingStage, stru
 
 			sdata->boolFirstBoot = 0;
 
+#if defined(CTR_NATIVE)
+			// Quick start (--track) goes straight to the race: no copyright page.
+			if (!NativeQuickStart_IsEnabled())
+			{
+#endif
 			// Load Intro TIM for Copyright Page from VRAM file
 			LOAD_VramFile(bigfile, LOAD_FIRST_BOOT_COPYRIGHT_TIM_BIGFILE_INDEX, NULL, &vramSize, -1);
 			MainInit_VRAMDisplay();
@@ -99,6 +104,7 @@ int LOAD_TenStages(struct GameTracker *unusedGameTracker, int loadingStage, stru
 			{
 				VSync(0);
 				Platform_PresentVRAMDisplay();
+			}
 			}
 #endif
 
